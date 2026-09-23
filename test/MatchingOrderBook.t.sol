@@ -31,42 +31,42 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testPlaceOrderBeforeMarketCreation() public {
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.expectRevert("createMarket before placing an order on it"); 
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115 * 1e6, 1e6);
 	}
 
 	function testCreateMarket() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 	}
 
 	function testCreateMultipleMarketsForSamePair() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		orderBook.createMarket(address(EURT), address(USDC), 10e6, 10e6, 0, 0, address(0x0));
-		orderBook.createMarket(address(EURT), address(USDC), 0, 100e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 10e6, 10e6, 0, 1, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 100e6, 0, 1, address(0x0));
 	}
 	
 	function testHackBankFailWithExternalAddress() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
 		vm.expectRevert("only owner can withdraw funds");
 		Bank(marketDetails.bankAddress).withdrawTo(user1, address(0), 1e18);
 	}
 
 	function testCreateMarketTwiceAndFail() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.expectRevert("market has already been created");
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 	}
 	
 	function testPlaceOneOrderSell() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 100e18);
 		EURT.mint(user1, 1000*1e18);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, 1e6);
 	        MatchingOrderBook.Order memory order = orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId);
@@ -85,11 +85,11 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testPlaceOneOrderBuy() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		USDC.approve(address(orderBook), 100e18);
 		USDC.mint(user1, 1000*1e18);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, 1e6);
 	        MatchingOrderBook.Order memory order = orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId);
@@ -108,11 +108,11 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testPlaceTwoOrdersToCheckGas() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		USDC.approve(address(orderBook), 100e18);
 		USDC.mint(user1, 1000*1e18);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, 1e6);
 		vm.prank(user1);
@@ -120,11 +120,11 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testPlace500SellOrders() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 100e18);
 		EURT.mint(user1, 1000*1e18);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		for (uint i=1; i < 500; i++) {
 			vm.prank(user1);
 			orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, i * 1e6);
@@ -137,11 +137,11 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testPlace100SellOrders() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 100e18);
 		EURT.mint(user1, 1000*1e18);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		for (uint i=1; i < 101; i++) {
 			vm.prank(user1);
 			orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, i * 1e6);
@@ -156,11 +156,11 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testPlace100BuyOrders() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		USDC.approve(address(orderBook), 100e18);
 		USDC.mint(user1, 1000*1e18);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		for (uint i=1; i < 101; i++) {
 			vm.prank(user1);
 			orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, i * 1e6);
@@ -197,14 +197,14 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 100e18);
 		vm.prank(user2);
 		USDC.approve(address(orderBook), 100e18);
 		EURT.mint(user1, 1000e6);
 		USDC.mint(user2, 1000e6);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
 		vm.prank(user2);
@@ -244,14 +244,14 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		USDC.approve(address(orderBook), 100e18);
 		vm.prank(user2);
 		EURT.approve(address(orderBook), 100e18);
 		USDC.mint(user1, 3300e6);
 		EURT.mint(user2, 2500e6);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
 		vm.prank(user1);
@@ -308,14 +308,14 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 100e18);
 		vm.prank(user2);
 		USDC.approve(address(orderBook), 100e18);
 		EURT.mint(user1, 3000e6);
 		USDC.mint(user2, 4200e6);
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
 		vm.prank(user1);
@@ -384,8 +384,8 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 		
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
 
 		vm.prank(user1);
@@ -425,8 +425,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testLotsOfOrders() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 100e18);
@@ -466,8 +466,8 @@ contract MatchingOrderBookTest is Test {
 
 
 	function testCancelOrder() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 1000e6);
@@ -485,8 +485,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testDoubleCancelOrderFail() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 1000e6);
@@ -502,8 +502,8 @@ contract MatchingOrderBookTest is Test {
 	}
 	
 	function testCancelOrderWrongUserFail() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 1000e6);
@@ -537,8 +537,8 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
 
 		vm.prank(user1);
@@ -584,8 +584,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testFillOrKillTooSmallFill() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 1000e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 1000e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 1000e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 1000e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 1000e6);
@@ -605,8 +605,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testFillThenTooSmallToPost() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 1000e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 1000e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 1000e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 1000e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 1000e6);
@@ -628,8 +628,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testInsertBestOffer() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 2000e6);
@@ -643,8 +643,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testInsertBestBid() public {
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 2000e6);
@@ -680,8 +680,8 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 		
-		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
 
 		vm.prank(user1);
@@ -742,14 +742,14 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 
-		orderBook.createMarket(address(WETH), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		orderBook.createMarket(address(WETH), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		USDC.approve(address(orderBook), 100e18);
 		vm.prank(user2);
 		WETH.approve(address(orderBook), 100e18);
 		USDC.mint(user1, 3300e6);
 		WETH.mint(user2, 25e17);
-		bytes32 marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 10e6, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 1000e6);
 		vm.prank(user1);
@@ -806,14 +806,14 @@ contract MatchingOrderBookTest is Test {
 			WETH.transfer(burnAddress, user2weth);
 		}
 
-		orderBook.createMarket(address(WBTC), address(WETH), 1e3, 0, 0, 0, address(0x0));
+		orderBook.createMarket(address(WBTC), address(WETH), 1e3, 0, 0, 1, address(0x0));
 		vm.prank(user1);
 		WBTC.approve(address(orderBook), 25e7);
 		vm.prank(user2);
 		WETH.approve(address(orderBook), 48e18);
 		WBTC.mint(user1, 25e7);
 		WETH.mint(user2, 48e18);
-		bytes32 marketId = orderBook.getMarketId(address(WBTC), address(WETH), 1e3, 0, 0, 0, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(WBTC), address(WETH), 1e3, 0, 0, 1, address(0x0));
 		vm.prank(user2);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e8, 15e18);
 		vm.prank(user2);
@@ -848,8 +848,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testUnsplittableShares() public {
-		orderBook.createMarket(address(AAPL), address(USDC), 0, 0, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(AAPL), address(USDC), 0, 0, 0, 0, address(0x0));
+		orderBook.createMarket(address(AAPL), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(AAPL), address(USDC), 0, 0, 0, 1, address(0x0));
 		AAPL.mint(user1, 1);
 		USDC.mint(user2, 100e6);
 		vm.prank(user1);
@@ -869,8 +869,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function test1000WethUsdcOrders() public {
-		orderBook.createMarket(address(WETH), address(USDC), 0, 0, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 0, 0, 0, address(0x0));
+		orderBook.createMarket(address(WETH), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 0, 0, 1, address(0x0));
 		WETH.mint(user1, 1e30);
 		USDC.mint(user1, 1e30);
 		WETH.mint(user2, 1e30);
@@ -899,8 +899,8 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function deleteFirstOrderUpdateHead() public {
-		orderBook.createMarket(address(WETH), address(USDC), 0, 0, 0, 0, address(0x0));
-		bytes32 marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 0, 0, 0, address(0x0));
+		orderBook.createMarket(address(WETH), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 0, 0, 1, address(0x0));
 		WETH.mint(user1, 1e30);
 		vm.prank(user1);
 		uint128 firstOrderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 1001e6);
