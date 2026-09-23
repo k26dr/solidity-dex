@@ -45,6 +45,9 @@ contract MatchingOrderBook {
 		address quoteToken;
 		uint baseMinPostSize;
 		uint quoteMinPostSize;
+		uint feeNumerator;
+		uint feeDenominator;
+		address payable feeReceiver;
 		address payable bankAddress;
 	}
 	struct PlaceOrderVars {
@@ -62,14 +65,14 @@ contract MatchingOrderBook {
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
 	event OrderFill(uint indexed orderId, uint baseQuantity);
-	event MarketCreated(bytes32 marketId, address indexed baseToken, address indexed quoteToken, uint baseMinimum, uint quoteMinimum, address bankAddress);
+	event MarketCreated(bytes32 marketId, address indexed baseToken, address indexed quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver, address bankAddress);
 
-	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum) external {
-		bytes32 marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum);
+	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) external {
+		bytes32 marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver);
 		require(MARKET_DETAILS[marketId].bankAddress == address(0), "market has already been created");
 		address payable bankAddress = payable(address(new Bank(address(this))));
-		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, bankAddress);
-		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, bankAddress);
+		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, payable(feeReceiver), bankAddress);
+		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver, bankAddress);
 	}
 
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external returns (uint128 orderId) {
@@ -259,8 +262,8 @@ contract MatchingOrderBook {
 		emit OrderCanceled(orderId);
 	}
 
-	function getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum) public pure returns (bytes32) {
-		return keccak256(abi.encodePacked(baseToken, quoteToken, baseMinimum, quoteMinimum));
+	function getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) public pure returns (bytes32) {
+		return keccak256(abi.encodePacked(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver));
 	}
 
 	function getMarketDetails(bytes32 marketId) public view returns (MarketDetails memory) {
