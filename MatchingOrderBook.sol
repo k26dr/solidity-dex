@@ -2,6 +2,8 @@
 // 
 // This software operates on a freemium royalty scheme. Any person or entity who makes more than $100k USD equivalent via the fee mechanism embedded in this software owes the copyright holder 5% of the fee revenue as a royalty. This applies to any forks and modified versions of the repository that use this software as well. 
 // 
+// The copyright holder maintains the right to modify the royalty percentage or minimum at any time and users of this software must comply with the new royalty rules. 
+//
 // The requirement for fee royalties extends to anyone who simply creates markets via the smart contracts as well as anybody who re-deploys these contracts. 
 // 
 // This software can be deployed as is to any chain that supports Solidity (as long as royalties are paid), but it cannot be modified in a commercial deployment without a license agreement from the copyright holder. 
