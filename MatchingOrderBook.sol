@@ -6,7 +6,7 @@
 //
 // The requirement for fee royalties extends to anyone who simply creates markets via the smart contracts as well as anybody who re-deploys these contracts. 
 // 
-// This software can be deployed as is to any chain that supports Solidity (as long as royalties are paid), but it cannot be modified in a commercial deployment without a license agreement from the copyright holder. 
+// This software can be deployed as is to any chain, but it cannot be modified in a commercial deployment without a license agreement from the copyright holder. 
 // 
 // The code in this repository cannot be used as training data for any artifical intelligence system. 
 //
