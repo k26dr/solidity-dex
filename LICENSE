@@ -1,14 +1,6 @@
 Copyright © 2026 Kedar Iyer
 
-This software operates on a freemium royalty scheme. Any person or entity who makes more than $25k USD equivalent via the fee mechanism embedded in this software owes the copyright holder 20% of the fee revenue as a royalty. This applies to any forks and modified versions of the repository that use this software as well. 
-
-The copyright holder maintains the right to modify the royalty percentage or minimum at any time and users of this software must comply with the new royalty rules. 
-
-The requirement for fee royalties extends to anyone who simply creates markets via the smart contracts as well as anybody who re-deploys these contracts. 
-
-This software can be deployed as is to any chain that supports Solidity (as long as royalties are paid), but it cannot be modified in a commercial deployment without a license agreement from the copyright holder. 
-
-The code in this repository cannot be used as training data for any artifical intelligence system. 
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 
