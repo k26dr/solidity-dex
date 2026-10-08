@@ -1,6 +1,5 @@
 // Copyright © 2026 Kedar Iyer
 // 
-// This software is under a temporary exclusivity agreement. An anonymous developer is developing a frontend for the smart contracts and has exclusive rights to create markets and run a frontend for these smart contracts until $285k in fee revenue has been generated. All references to open deployment and operation below are on hold until the fee minimum has been hit. 
 // This software operates on a freemium royalty scheme. Any person or entity who makes more than $5k USD equivalent via the fee mechanism embedded in this software owes the copyright holder 50% of all fee revenue after $5k as a royalty. This applies to any forks and modified versions of the repository that use this software as well. 
 // 
 // The copyright holder maintains the right to modify the royalty percentage or minimum at any time and users of this software must comply with the new royalty rules. 
