@@ -1,6 +1,8 @@
 # On-Chain Matching Engine in Solidity
 
-There are 2 versions of Solidity orderbooks in this repo. The primary one is [MatchingOrderBook.sol](MatchingOrderBook.sol). Market creators can set custom fees and fee receivers on that one so anyone can use this as a way to make revenue. There is a license agreement, and in some deployments, a protocol fee so that the copyright holders can receive a revshare. 
+There are 2 versions of Solidity orderbooks in this repo. The primary one is [MatchingOrderBook.sol](MatchingOrderBook.sol). 
+
+Market creators can set custom fees and fee receivers on that one so anyone can use this as a way to make revenue. There is a license agreement, and in some deployments, a protocol fee so that the copyright holders can receive a revshare. 
 
 It is a full on-chain spot exchange with on-chain matching and risk isolation. 
 
