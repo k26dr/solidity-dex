@@ -1,6 +1,6 @@
-# On-Chain Limit Order Books for EVM chains
+# On-Chain Matching Engine in Solidity
 
-There are 2 versions of EVM orderbooks in this repo. Both charge 0 trading fees by default. Because everything is a 0-trading-fee limit order, execution is better than an AMM like Uniswap where slippage and LP fees can lead to extensive execution loss. 
+There are 2 versions of Solidity orderbooks in this repo. The primary one is [MatchingOrderBook.sol](MatchingOrderBook.sol). Market creators can set custom fees and fee receivers on that one so anyone can use this as a way to make revenue. 
 
 One is a scalable system for high-fee chains like Ethereum that allows for decentralized operation via an indexer that can be run locally or remotely: [Orderbook.sol](OrderBook.sol). There are no order minimums and the design optimizes gas to keep execution prices low.
 
