@@ -75,7 +75,7 @@ contract MatchingOrderBook {
 
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
-	event OrderFill(uint indexed orderId, uint baseQuantity);
+	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
 	event MarketCreated(bytes32 marketId, address indexed baseToken, address indexed quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver, address bankAddress);
 
 	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) external {
@@ -147,7 +147,7 @@ contract MatchingOrderBook {
 				uint fillBaseQuantity = (baseQuantity > fillOrder.baseQuantity) ? fillOrder.baseQuantity : baseQuantity;
 				uint fillQuoteQuantity = fillBaseQuantity * fillOrder.price / 10**baseTokenDecimals;
 				placeOrderVars.usedQuoteQuantity += fillQuoteQuantity;
-				emit OrderFill(placeOrderVars.fillOrderId, fillBaseQuantity);
+				emit OrderFill(placeOrderVars.fillOrderId, fillOrder.user, msg.sender, marketId, fillBaseQuantity, fillOrder.price);
 
 				if (side == Side.SELL) {
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, fillQuoteQuantity);
