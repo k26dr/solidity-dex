@@ -1259,7 +1259,6 @@ contract MatchingOrderBookTest is Test {
 		assertEq(feeUsdc, 0);
 	}
 
-	// TODO: Test for when fee is set higher than 1
 	function testFeeTooHigh() public {
 		vm.expectRevert("fee numerator must be less than the denominator");
 		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1000, 1000, feeReceiver);
