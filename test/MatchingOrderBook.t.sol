@@ -1237,4 +1237,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(marketUsdc, 0);
 	}
 
+	// TODO: Test for when fee consumes entire order
+	// TODO: Test for when fee is set higher than 1
+
 }
