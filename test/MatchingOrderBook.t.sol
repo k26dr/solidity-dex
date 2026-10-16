@@ -18,6 +18,7 @@ contract MatchingOrderBookTest is Test {
 	address user3 = address(0x4);
 	address burnAddress = address(0x6);
 	address feeReceiver = address(0x7);
+	address protocolFeeReceiver = address(0x8);
 
 	function setUp() public {
 		USDC = new MockERC20("USDC", "USDC", 6);
@@ -25,7 +26,7 @@ contract MatchingOrderBookTest is Test {
 		WETH = new MockERC20("WETH", "WETH", 18);
 		WBTC = new MockERC20("WBTC", "Wrapped Bitcoin", 8);
 		AAPL = new MockERC20("AAPL", "Apple", 0);
-		orderBook = new MatchingOrderBook();
+		orderBook = new MatchingOrderBook(payable(protocolFeeReceiver));
 		USDC.mint(user1, 10000e6);
 		vm.prank(user1);
 		USDC.approve(address(orderBook), 100e18);

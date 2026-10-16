@@ -72,11 +72,17 @@ contract MatchingOrderBook {
 	mapping(bytes32 => mapping(Side => uint128)) orderbooks; // marketId -> Side -> firstOrderId
 	mapping(bytes32 => mapping(Side => mapping(uint128 => Order))) orders; // marketId -> Side -> orderId -> Order
 	uint128 public orderCounter = 0; // order counter increments before being saved so the first order ID saved will be 1
+	address payable protocolFeeReceiver;
 
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver, address bankAddress);
+
+	constructor(address payable _protocolFeeReceiver) {
+		require (_protocolFeeReceiver != address(0), "must set protocol fee receiver");
+		protocolFeeReceiver = _protocolFeeReceiver;
+	}
 
 	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) external {
 		require(feeNumerator < feeDenominator, "fee numerator must be less than the denominator");
