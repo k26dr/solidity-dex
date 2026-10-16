@@ -150,11 +150,19 @@ contract MatchingOrderBook {
 				emit OrderFill(placeOrderVars.fillOrderId, fillOrder.user, msg.sender, marketId, fillBaseQuantity, fillOrder.price);
 
 				if (side == Side.SELL) {
+					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator / marketDetails.feeDenominator;
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, fillQuoteQuantity);
-					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
+					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.baseToken, fillBaseQuantity - takerFee);
+					if (takerFee > 0) {
+						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
+					}
 				} else {
+					uint takerFee = fillQuoteQuantity * marketDetails.feeNumerator / marketDetails.feeDenominator;
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity);
-					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
+					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity - takerFee);
+					if (takerFee > 0) {
+						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
+					}
 				}
 
 				if (baseQuantity >= fillOrder.baseQuantity) {
