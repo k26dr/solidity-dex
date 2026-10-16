@@ -1037,4 +1037,70 @@ contract MatchingOrderBookTest is Test {
 		assertEq(feeUsdc, 1e5);
 	}
 
+	function testTakerFeeWithPartialFill() public {
+		// zero all balances to start
+		uint user1eurt = EURT.balanceOf(user1);
+		uint user1usdc = USDC.balanceOf(user1);
+		uint user2eurt = EURT.balanceOf(user2);
+		uint user2usdc = USDC.balanceOf(user2);
+		uint feeEurt = EURT.balanceOf(feeReceiver);
+		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		if (user1eurt != 0) {
+			vm.prank(user1);
+			EURT.transfer(burnAddress, user1eurt);
+		}
+		if (user1usdc != 0) {
+			vm.prank(user1);
+			USDC.transfer(burnAddress, user1usdc);
+		}
+		if (user2eurt != 0) {
+			vm.prank(user1);
+			EURT.transfer(burnAddress, user2eurt);
+		}
+		if (user2usdc != 0) {
+			vm.prank(user1);
+			USDC.transfer(burnAddress, user2usdc);
+		}
+		if (feeEurt != 0) {
+			vm.prank(feeReceiver);
+			EURT.transfer(burnAddress, feeEurt);
+		}
+		if (feeUsdc != 0) {
+			vm.prank(feeReceiver);
+			USDC.transfer(burnAddress, feeUsdc);
+		}
+
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
+		vm.prank(user1);
+		USDC.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		EURT.mint(user2, 1000e6);
+		USDC.mint(user1, 2000e6);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2000e6, 1e6);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+
+		// verify post-trade balances
+		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
+		user1eurt = EURT.balanceOf(user1);
+		user1usdc = USDC.balanceOf(user1);
+		user2eurt = EURT.balanceOf(user2);
+		user2usdc = USDC.balanceOf(user2);
+		feeEurt = EURT.balanceOf(feeReceiver);
+		feeUsdc = USDC.balanceOf(feeReceiver);
+		uint marketEurt = EURT.balanceOf(marketDetails.bankAddress);
+		uint marketUsdc = USDC.balanceOf(marketDetails.bankAddress);
+		assertEq(user1eurt, 1000e6);
+		assertEq(user1usdc, 0);
+		assertEq(user2eurt, 0);
+		assertEq(user2usdc, 9999e5);
+		assertEq(feeEurt, 0);
+		assertEq(feeUsdc, 1e5);
+		assertEq(marketEurt, 0);
+		assertEq(marketUsdc, 1000e6);
+	}
+
 }
