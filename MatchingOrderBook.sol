@@ -168,7 +168,9 @@ contract MatchingOrderBook {
 				if (baseQuantity >= fillOrder.baseQuantity) {
 					delete orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId];
 					orderbooks[marketId][placeOrderVars.makerSide] = fillOrder.nextOrderId;
-					orders[marketId][placeOrderVars.makerSide][fillOrder.nextOrderId].previousOrderId = 0;
+					if (fillOrder.nextOrderId != 0) {
+						orders[marketId][placeOrderVars.makerSide][fillOrder.nextOrderId].previousOrderId = 0;
+					}
 				}
 				if (baseQuantity > fillOrder.baseQuantity) {
 					baseQuantity -= fillOrder.baseQuantity;
