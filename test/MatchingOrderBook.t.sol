@@ -1238,7 +1238,6 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	function testOrderTooSmallForFee() public {
-
 		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1, 1000, feeReceiver);
 		vm.prank(user1);
 		EURT.approve(address(orderBook), 100e18);
