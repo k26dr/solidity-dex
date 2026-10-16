@@ -1237,7 +1237,34 @@ contract MatchingOrderBookTest is Test {
 		assertEq(marketUsdc, 0);
 	}
 
-	// TODO: Test for when fee consumes entire order
+	function testOrderTooSmallForFee() public {
+
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1, 1000, feeReceiver);
+		vm.prank(user1);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		USDC.approve(address(orderBook), 100e18);
+		EURT.mint(user1, 2000e6);
+		USDC.mint(user2, 2000e6);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 1, 1000, feeReceiver);
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 1e6);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 2e6);
+
+		// verify post-trade balances
+		uint feeEurt = EURT.balanceOf(feeReceiver);
+		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		assertEq(feeEurt, 0);
+		assertEq(feeUsdc, 0);
+	}
+
 	// TODO: Test for when fee is set higher than 1
+	function testFeeTooHigh() public {
+		vm.expectRevert("fee numerator must be less than the denominator");
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1000, 1000, feeReceiver);
+		vm.expectRevert("fee numerator must be less than the denominator");
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 2, 1, feeReceiver);
+	}
 
 }
