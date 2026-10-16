@@ -80,7 +80,7 @@ contract MatchingOrderBook {
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver, address bankAddress);
 
-	constructor(address payable _protocolFeeReceiver) public {
+	constructor(address payable _protocolFeeReceiver) {
 		require (_protocolFeeReceiver != address(0), "must set protocol fee receiver");
 		protocolFeeReceiver = _protocolFeeReceiver;
 	}
@@ -163,18 +163,26 @@ contract MatchingOrderBook {
 				emit OrderFill(placeOrderVars.fillOrderId, fillOrder.user, msg.sender, marketId, fillBaseQuantity, fillOrder.price);
 
 				if (side == Side.SELL) {
-					uint takerFee = fillQuoteQuantity * marketDetails.feeNumerator / marketDetails.feeDenominator;
-					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, fillQuoteQuantity - takerFee);
+					uint takerFee = fillQuoteQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
+					uint protocolFee = fillQuoteQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
+					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, fillQuoteQuantity - takerFee - protocolFee);
 					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
 					if (takerFee > 0) {
 						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
 					}
+					if (protocolFee > 0) {
+						Bank(marketDetails.bankAddress).withdrawTo(protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
+					}
 				} else {
-					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator / marketDetails.feeDenominator;
-					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee);
+					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
+					uint protocolFee = fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
+					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
 					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
 					if (takerFee > 0) {
 						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
+					}
+					if (protocolFee > 0) {
+						Bank(marketDetails.bankAddress).withdrawTo(protocolFeeReceiver, marketDetails.baseToken, protocolFee);
 					}
 				}
 

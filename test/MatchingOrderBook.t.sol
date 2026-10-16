@@ -924,6 +924,8 @@ contract MatchingOrderBookTest is Test {
 		uint user2usdc = USDC.balanceOf(user2);
 		uint feeEurt = EURT.balanceOf(feeReceiver);
 		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
 			vm.prank(user1);
 			EURT.transfer(burnAddress, user1eurt);
@@ -947,6 +949,14 @@ contract MatchingOrderBookTest is Test {
 		if (feeUsdc != 0) {
 			vm.prank(feeReceiver);
 			USDC.transfer(burnAddress, feeUsdc);
+		}
+		if (protocolFeeEurt != 0) {
+			vm.prank(protocolFeeReceiver);
+			EURT.transfer(burnAddress, protocolFeeEurt);
+		}
+		if (protocolFeeUsdc != 0) {
+			vm.prank(protocolFeeReceiver);
+			USDC.transfer(burnAddress, protocolFeeUsdc);
 		}
 
 		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
@@ -969,12 +979,16 @@ contract MatchingOrderBookTest is Test {
 		user2usdc = USDC.balanceOf(user2);
 		feeEurt = EURT.balanceOf(feeReceiver);
 		feeUsdc = USDC.balanceOf(feeReceiver);
+		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		assertEq(user1eurt, 0);
 		assertEq(user1usdc, 1000e6);
 		assertEq(user2eurt, 9999e5);
 		assertEq(user2usdc, 0);
-		assertEq(feeEurt, 1e5);
+		assertEq(feeEurt, 5e4);
 		assertEq(feeUsdc, 0);
+		assertEq(protocolFeeEurt, 5e4);
+		assertEq(protocolFeeUsdc, 0);
 	}
 
 	function testTakerFeeWithTakerSell() public {
@@ -985,6 +999,8 @@ contract MatchingOrderBookTest is Test {
 		uint user2usdc = USDC.balanceOf(user2);
 		uint feeEurt = EURT.balanceOf(feeReceiver);
 		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
 			vm.prank(user1);
 			EURT.transfer(burnAddress, user1eurt);
@@ -1008,6 +1024,14 @@ contract MatchingOrderBookTest is Test {
 		if (feeUsdc != 0) {
 			vm.prank(feeReceiver);
 			USDC.transfer(burnAddress, feeUsdc);
+		}
+		if (protocolFeeEurt != 0) {
+			vm.prank(protocolFeeReceiver);
+			EURT.transfer(burnAddress, protocolFeeEurt);
+		}
+		if (protocolFeeUsdc != 0) {
+			vm.prank(protocolFeeReceiver);
+			USDC.transfer(burnAddress, protocolFeeUsdc);
 		}
 
 		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
@@ -1030,12 +1054,16 @@ contract MatchingOrderBookTest is Test {
 		user2usdc = USDC.balanceOf(user2);
 		feeEurt = EURT.balanceOf(feeReceiver);
 		feeUsdc = USDC.balanceOf(feeReceiver);
+		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		assertEq(user1eurt, 1000e6);
 		assertEq(user1usdc, 0);
 		assertEq(user2eurt, 0);
 		assertEq(user2usdc, 9999e5);
 		assertEq(feeEurt, 0);
-		assertEq(feeUsdc, 1e5);
+		assertEq(feeUsdc, 5e4);
+		assertEq(protocolFeeEurt, 0);
+		assertEq(protocolFeeUsdc, 5e4);
 	}
 
 	function testTakerFeeWithPartialFill() public {
@@ -1046,6 +1074,8 @@ contract MatchingOrderBookTest is Test {
 		uint user2usdc = USDC.balanceOf(user2);
 		uint feeEurt = EURT.balanceOf(feeReceiver);
 		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
 			vm.prank(user1);
 			EURT.transfer(burnAddress, user1eurt);
@@ -1069,6 +1099,14 @@ contract MatchingOrderBookTest is Test {
 		if (feeUsdc != 0) {
 			vm.prank(feeReceiver);
 			USDC.transfer(burnAddress, feeUsdc);
+		}
+		if (protocolFeeEurt != 0) {
+			vm.prank(protocolFeeReceiver);
+			EURT.transfer(burnAddress, protocolFeeEurt);
+		}
+		if (protocolFeeUsdc != 0) {
+			vm.prank(protocolFeeReceiver);
+			USDC.transfer(burnAddress, protocolFeeUsdc);
 		}
 
 		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
@@ -1092,6 +1130,8 @@ contract MatchingOrderBookTest is Test {
 		user2usdc = USDC.balanceOf(user2);
 		feeEurt = EURT.balanceOf(feeReceiver);
 		feeUsdc = USDC.balanceOf(feeReceiver);
+		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		uint marketEurt = EURT.balanceOf(marketDetails.bankAddress);
 		uint marketUsdc = USDC.balanceOf(marketDetails.bankAddress);
 		assertEq(user1eurt, 1000e6);
@@ -1099,9 +1139,11 @@ contract MatchingOrderBookTest is Test {
 		assertEq(user2eurt, 0);
 		assertEq(user2usdc, 9999e5);
 		assertEq(feeEurt, 0);
-		assertEq(feeUsdc, 1e5);
+		assertEq(feeUsdc, 5e4);
 		assertEq(marketEurt, 0);
 		assertEq(marketUsdc, 1000e6);
+		assertEq(protocolFeeEurt, 0);
+		assertEq(protocolFeeUsdc, 5e4);
 	}
 
 	function testTakerFeeWithPartialFillTakerBuy() public {
@@ -1112,6 +1154,8 @@ contract MatchingOrderBookTest is Test {
 		uint user2usdc = USDC.balanceOf(user2);
 		uint feeEurt = EURT.balanceOf(feeReceiver);
 		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
 			vm.prank(user1);
 			EURT.transfer(burnAddress, user1eurt);
@@ -1135,6 +1179,14 @@ contract MatchingOrderBookTest is Test {
 		if (feeUsdc != 0) {
 			vm.prank(feeReceiver);
 			USDC.transfer(burnAddress, feeUsdc);
+		}
+		if (protocolFeeEurt != 0) {
+			vm.prank(protocolFeeReceiver);
+			EURT.transfer(burnAddress, protocolFeeEurt);
+		}
+		if (protocolFeeUsdc != 0) {
+			vm.prank(protocolFeeReceiver);
+			USDC.transfer(burnAddress, protocolFeeUsdc);
 		}
 
 		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
@@ -1158,16 +1210,20 @@ contract MatchingOrderBookTest is Test {
 		user2usdc = USDC.balanceOf(user2);
 		feeEurt = EURT.balanceOf(feeReceiver);
 		feeUsdc = USDC.balanceOf(feeReceiver);
+		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		uint marketEurt = EURT.balanceOf(marketDetails.bankAddress);
 		uint marketUsdc = USDC.balanceOf(marketDetails.bankAddress);
 		assertEq(user1eurt, 0);
 		assertEq(user1usdc, 1000e6);
 		assertEq(user2eurt, 9999e5);
 		assertEq(user2usdc, 0);
-		assertEq(feeEurt, 1e5);
+		assertEq(feeEurt, 5e4);
 		assertEq(feeUsdc, 0);
 		assertEq(marketEurt, 1000e6);
 		assertEq(marketUsdc, 0);
+		assertEq(protocolFeeEurt, 5e4);
+		assertEq(protocolFeeUsdc, 0);
 	}
 
 	function testTakerFeeWithMultipleFills() public {
@@ -1178,6 +1234,8 @@ contract MatchingOrderBookTest is Test {
 		uint user2usdc = USDC.balanceOf(user2);
 		uint feeEurt = EURT.balanceOf(feeReceiver);
 		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
 			vm.prank(user1);
 			EURT.transfer(burnAddress, user1eurt);
@@ -1201,6 +1259,14 @@ contract MatchingOrderBookTest is Test {
 		if (feeUsdc != 0) {
 			vm.prank(feeReceiver);
 			USDC.transfer(burnAddress, feeUsdc);
+		}
+		if (protocolFeeEurt != 0) {
+			vm.prank(protocolFeeReceiver);
+			EURT.transfer(burnAddress, protocolFeeEurt);
+		}
+		if (protocolFeeUsdc != 0) {
+			vm.prank(protocolFeeReceiver);
+			USDC.transfer(burnAddress, protocolFeeUsdc);
 		}
 
 		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
@@ -1226,16 +1292,20 @@ contract MatchingOrderBookTest is Test {
 		user2usdc = USDC.balanceOf(user2);
 		feeEurt = EURT.balanceOf(feeReceiver);
 		feeUsdc = USDC.balanceOf(feeReceiver);
+		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		uint marketEurt = EURT.balanceOf(marketDetails.bankAddress);
 		uint marketUsdc = USDC.balanceOf(marketDetails.bankAddress);
 		assertEq(user1eurt, 0);
 		assertEq(user1usdc, 1500e6);
 		assertEq(user2eurt, 9999e5);
 		assertEq(user2usdc, 500e6); // refunded
-		assertEq(feeEurt, 1e5);
+		assertEq(feeEurt, 5e4);
 		assertEq(feeUsdc, 0);
 		assertEq(marketEurt, 1000e6);
 		assertEq(marketUsdc, 0);
+		assertEq(protocolFeeEurt, 5e4);
+		assertEq(protocolFeeUsdc, 0);
 	}
 
 	function testOrderTooSmallForFee() public {
@@ -1255,8 +1325,12 @@ contract MatchingOrderBookTest is Test {
 		// verify post-trade balances
 		uint feeEurt = EURT.balanceOf(feeReceiver);
 		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		assertEq(feeEurt, 0);
 		assertEq(feeUsdc, 0);
+		assertEq(protocolFeeEurt, 0);
+		assertEq(protocolFeeUsdc, 0);
 	}
 
 	function testFeeTooHigh() public {
@@ -1264,6 +1338,96 @@ contract MatchingOrderBookTest is Test {
 		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1000, 1000, feeReceiver);
 		vm.expectRevert("fee numerator must be less than the denominator");
 		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 2, 1, feeReceiver);
+	}
+
+	function testCustomProtocolFee() public {
+		vm.prank(protocolFeeReceiver);
+		orderBook.updateProtocolFee(20);
+
+		// zero all balances to start
+		uint user1eurt = EURT.balanceOf(user1);
+		uint user1usdc = USDC.balanceOf(user1);
+		uint user2eurt = EURT.balanceOf(user2);
+		uint user2usdc = USDC.balanceOf(user2);
+		uint feeEurt = EURT.balanceOf(feeReceiver);
+		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
+		if (user1eurt != 0) {
+			vm.prank(user1);
+			EURT.transfer(burnAddress, user1eurt);
+		}
+		if (user1usdc != 0) {
+			vm.prank(user1);
+			USDC.transfer(burnAddress, user1usdc);
+		}
+		if (user2eurt != 0) {
+			vm.prank(user1);
+			EURT.transfer(burnAddress, user2eurt);
+		}
+		if (user2usdc != 0) {
+			vm.prank(user1);
+			USDC.transfer(burnAddress, user2usdc);
+		}
+		if (feeEurt != 0) {
+			vm.prank(feeReceiver);
+			EURT.transfer(burnAddress, feeEurt);
+		}
+		if (feeUsdc != 0) {
+			vm.prank(feeReceiver);
+			USDC.transfer(burnAddress, feeUsdc);
+		}
+		if (protocolFeeEurt != 0) {
+			vm.prank(protocolFeeReceiver);
+			EURT.transfer(burnAddress, protocolFeeEurt);
+		}
+		if (protocolFeeUsdc != 0) {
+			vm.prank(protocolFeeReceiver);
+			USDC.transfer(burnAddress, protocolFeeUsdc);
+		}
+
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
+		vm.prank(user1);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		USDC.approve(address(orderBook), 100e18);
+		EURT.mint(user1, 1000e6);
+		USDC.mint(user2, 1000e6);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+
+		// verify post-trade balances
+		user1eurt = EURT.balanceOf(user1);
+		user1usdc = USDC.balanceOf(user1);
+		user2eurt = EURT.balanceOf(user2);
+		user2usdc = USDC.balanceOf(user2);
+		feeEurt = EURT.balanceOf(feeReceiver);
+		feeUsdc = USDC.balanceOf(feeReceiver);
+		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
+		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
+		assertEq(user1eurt, 0);
+		assertEq(user1usdc, 1000e6);
+		assertEq(user2eurt, 9999e5);
+		assertEq(user2usdc, 0);
+		assertEq(feeEurt, 8e4);
+		assertEq(feeUsdc, 0);
+		assertEq(protocolFeeEurt, 2e4);
+		assertEq(protocolFeeUsdc, 0);
+	}
+
+	function testRevertSetProtocolFeeOver50() public {
+		vm.expectRevert("Max protocol fee is 50 percent of market fee");
+		vm.prank(protocolFeeReceiver);
+		orderBook.updateProtocolFee(80);
+	}
+
+	function testMaliciousProtocolFeeSet() public {
+		vm.expectRevert("only protocol fee receiver can set new percentage");
+		vm.prank(user1);
+		orderBook.updateProtocolFee(80);
 	}
 
 }
