@@ -176,43 +176,25 @@ contract MatchingOrderBook {
 					if (quoteQuantityMinusFees > 0) {
 						Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
 					}
-					try Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.baseToken, fillBaseQuantity) {} 
-					catch { // failed payment likely from address freeze in contract
-						failedPayments[fillOrder.user][marketDetails.bankAddress][marketDetails.baseToken] += fillBaseQuantity;
-					}
+					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
 					if (takerFee > 0) {
-						try Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.quoteToken, takerFee) {}
-						catch { // failed payment likely from address freeze in contract
-							failedPayments[marketDetails.feeReceiver][marketDetails.bankAddress][marketDetails.quoteToken] += takerFee;
-						}
+						_payOrPark(marketDetails.bankAddress, marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
 					}
 					if (protocolFee > 0) {
-						try Bank(marketDetails.bankAddress).withdrawTo(protocolFeeReceiver, marketDetails.quoteToken, protocolFee) {}
-						catch { // failed payment likely from address freeze in contract
-							failedPayments[protocolFeeReceiver][marketDetails.bankAddress][marketDetails.quoteToken] += protocolFee;
-						}
+						_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
 					}
 				} else {
 					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
 					if (fillQuoteQuantity > 0) {
-						try Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity) {}
-						catch { // failed payment likely from address freeze in contract
-							failedPayments[fillOrder.user][marketDetails.bankAddress][marketDetails.quoteToken] += fillQuoteQuantity;
-						}
+						_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
 					}
 					if (takerFee > 0) {
-						try Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.baseToken, takerFee) {}
-						catch {
-							failedPayments[marketDetails.feeReceiver][marketDetails.bankAddress][marketDetails.baseToken] += takerFee;
-						}
+						_payOrPark(marketDetails.bankAddress, marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
 					}
 					if (protocolFee > 0) {
-						try Bank(marketDetails.bankAddress).withdrawTo(protocolFeeReceiver, marketDetails.baseToken, protocolFee) {}
-						catch {
-							failedPayments[protocolFeeReceiver][marketDetails.bankAddress][marketDetails.baseToken] += protocolFee;
-						}
+						_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.baseToken, protocolFee);
 					}
 				}
 
@@ -331,19 +313,13 @@ contract MatchingOrderBook {
 		}
 
 		if (side == Side.SELL) {
-			try Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.baseToken, order.baseQuantity) {}
-			catch { // failed payment likely from address freeze in contract
-				failedPayments[order.user][marketDetails.bankAddress][marketDetails.baseToken] += order.baseQuantity;
-			}
+			_payOrPark(marketDetails.bankAddress, order.user, marketDetails.baseToken, order.baseQuantity);
 		} else if (side == Side.BUY) {
 			(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(marketDetails.baseToken).tryGetDecimals();
 			require(decimalCallSuccess, "failed to get decimals for token");
 			uint quoteQuantity = order.baseQuantity * order.price / 10**baseTokenDecimals;
 			if (quoteQuantity > 0) { // sanity check
-				try Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.quoteToken, quoteQuantity) {}
-				catch { // failed payment likely from address freeze in contract
-					failedPayments[order.user][marketDetails.bankAddress][marketDetails.quoteToken] += quoteQuantity;
-				}
+				_payOrPark(marketDetails.bankAddress, order.user, marketDetails.quoteToken, quoteQuantity);
 			}
 		}
 		emit OrderCanceled(orderId);
@@ -357,6 +333,14 @@ contract MatchingOrderBook {
 		failedPayments[msg.sender][bankAddress][token] = 0;
 		Bank(bankAddress).withdrawTo(msg.sender, token, amountToSend);
 		reentrancyGuard = false;
+	}
+
+	function _payOrPark(address bank, address to, address token, uint amount) internal {
+		if (amount == 0) return;
+		try Bank(bank).withdrawTo(to, token, amount) {}
+		catch {
+			failedPayments[to][bank][token] += amount;
+		}
 	}
 
 	function getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) public pure returns (bytes32) {
