@@ -83,6 +83,7 @@ contract MatchingOrderBook {
 	event OrderCanceled(uint indexed orderId);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver, address bankAddress);
+	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
 
 	constructor(address payable _protocolFeeReceiver) {
 		require (_protocolFeeReceiver != address(0), "must set protocol fee receiver");
@@ -328,6 +329,7 @@ contract MatchingOrderBook {
 		try Bank(bank).withdrawTo(to, token, amount) {}
 		catch {
 			failedPayments[to][bank][token] += amount;
+			emit PaymentFailed(to, bank, token, amount);
 		}
 	}
 
