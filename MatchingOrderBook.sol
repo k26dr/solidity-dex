@@ -77,6 +77,7 @@ contract MatchingOrderBook {
 	uint128 public orderCounter = 0; // order counter increments before being saved so the first order ID saved will be 1
 	address payable protocolFeeReceiver;
 	uint protocolFeePercent = 50; // Protocol fee as a percent of market fee. MAX 50.
+	bool protocolFeeLocked = false; // If protocolFeeReceiver address gets hacked, this variable can be set to lock the protocol fee at 0
 	bool reentrancyGuard = false;
 
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
@@ -93,7 +94,14 @@ contract MatchingOrderBook {
 	function updateProtocolFee(uint percent) public {
 		require(msg.sender == protocolFeeReceiver, "only protocol fee receiver can set new percentage");
 		require(percent <= 50, "Max protocol fee is 50 percent of market fee");
+		require(!protocolFeeLocked, "Protocol fee control is locked");
 		protocolFeePercent = percent;
+	}
+
+	function endProtocolFee() public {
+		require(msg.sender == protocolFeeReceiver, "only protocol fee receiver can lock protocol fee");
+		protocolFeeLocked = true;
+		protocolFeeReceiver = payable(address(0));
 	}
 
 	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) external {
