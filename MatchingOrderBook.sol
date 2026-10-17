@@ -181,10 +181,16 @@ contract MatchingOrderBook {
 						failedPayments[fillOrder.user][marketDetails.bankAddress][marketDetails.baseToken] += fillBaseQuantity;
 					}
 					if (takerFee > 0) {
-						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
+						try Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.quoteToken, takerFee) {}
+						catch { // failed payment likely from address freeze in contract
+							failedPayments[marketDetails.feeReceiver][marketDetails.bankAddress][marketDetails.quoteToken] += takerFee;
+						}
 					}
 					if (protocolFee > 0) {
-						Bank(marketDetails.bankAddress).withdrawTo(protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
+						try Bank(marketDetails.bankAddress).withdrawTo(protocolFeeReceiver, marketDetails.quoteToken, protocolFee) {}
+						catch { // failed payment likely from address freeze in contract
+							failedPayments[protocolFeeReceiver][marketDetails.bankAddress][marketDetails.quoteToken] += protocolFee;
+						}
 					}
 				} else {
 					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
@@ -197,10 +203,16 @@ contract MatchingOrderBook {
 						}
 					}
 					if (takerFee > 0) {
-						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
+						try Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.baseToken, takerFee) {}
+						catch {
+							failedPayments[marketDetails.feeReceiver][marketDetails.bankAddress][marketDetails.baseToken] += takerFee;
+						}
 					}
 					if (protocolFee > 0) {
-						Bank(marketDetails.bankAddress).withdrawTo(protocolFeeReceiver, marketDetails.baseToken, protocolFee);
+						try Bank(marketDetails.bankAddress).withdrawTo(protocolFeeReceiver, marketDetails.baseToken, protocolFee) {}
+						catch {
+							failedPayments[protocolFeeReceiver][marketDetails.bankAddress][marketDetails.baseToken] += protocolFee;
+						}
 					}
 				}
 
