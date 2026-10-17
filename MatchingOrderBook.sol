@@ -74,6 +74,7 @@ contract MatchingOrderBook {
 	uint128 public orderCounter = 0; // order counter increments before being saved so the first order ID saved will be 1
 	address payable protocolFeeReceiver;
 	uint protocolFeePercent = 50; // Protocol fee as a percent of market fee. MAX 50.
+	bool reentrancyGuard = false;
 
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
@@ -101,6 +102,8 @@ contract MatchingOrderBook {
 	}
 
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external returns (uint128 orderId) {
+		require(!reentrancyGuard, "malicious attack");
+		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
 		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0);
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
@@ -211,6 +214,7 @@ contract MatchingOrderBook {
 							Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
 						}
 					}
+					reentrancyGuard = false;
 					return 0;
 				}
 			}
@@ -231,6 +235,7 @@ contract MatchingOrderBook {
 					uint remainingQuoteQuantity = placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity;
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
 				}
+				reentrancyGuard = false;
 				return 0;
 			}
 			placeOrderVars.usedQuoteQuantity += postQuoteQuantity;
@@ -276,9 +281,12 @@ contract MatchingOrderBook {
 		}
 
 		emit OrderPlaced(orderId, msg.sender, marketId, side, baseQuantity, price);
+		reentrancyGuard = false;
 	}
 
 	function cancelOrder(bytes32 marketId, Side side, uint128 orderId) external {
+		require(!reentrancyGuard, "malicious attack");
+		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
 		Order memory order = orders[marketId][side][orderId];
 		require(msg.sender == order.user, "users can only cancel their own order / order may not exist");
@@ -303,6 +311,7 @@ contract MatchingOrderBook {
 			Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.quoteToken, quoteQuantity);
 		}
 		emit OrderCanceled(orderId);
+		reentrancyGuard = false;
 	}
 
 	function getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) public pure returns (bytes32) {
