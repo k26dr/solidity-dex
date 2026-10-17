@@ -168,7 +168,10 @@ contract MatchingOrderBook {
 				if (side == Side.SELL) {
 					uint takerFee = fillQuoteQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = fillQuoteQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
-					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, fillQuoteQuantity - takerFee - protocolFee);
+					uint quoteQuantityMinusFees = fillQuoteQuantity - takerFee - protocolFee;
+					if (quoteQuantityMinusFees > 0) {
+						Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
+					}
 					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
 					if (takerFee > 0) {
 						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
@@ -180,7 +183,9 @@ contract MatchingOrderBook {
 					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
-					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
+					if (fillQuoteQuantity > 0) {
+						Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
+					}
 					if (takerFee > 0) {
 						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
 					}
@@ -233,7 +238,9 @@ contract MatchingOrderBook {
 				} else {
 					// remainingQuoteQuantity and postQuoteQuantity can diverge significantly for orders that fill off the submitted taker price
 					uint remainingQuoteQuantity = placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity;
-					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
+					if (remainingQuoteQuantity > 0) {
+						Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
+					}
 				}
 				reentrancyGuard = false;
 				return 0;
@@ -301,14 +308,15 @@ contract MatchingOrderBook {
 			orderbooks[marketId][side] = order.nextOrderId;
 		}
 
-		// Re-entrancy here is limited to malicious tokens
 		if (side == Side.SELL) {
 			Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.baseToken, order.baseQuantity);
 		} else if (side == Side.BUY) {
 			(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(marketDetails.baseToken).tryGetDecimals();
 			require(decimalCallSuccess, "failed to get decimals for token");
 			uint quoteQuantity = order.baseQuantity * order.price / 10**baseTokenDecimals;
-			Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.quoteToken, quoteQuantity);
+			if (quoteQuantity > 0) { // sanity check
+				Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.quoteToken, quoteQuantity);
+			}
 		}
 		emit OrderCanceled(orderId);
 		reentrancyGuard = false;
