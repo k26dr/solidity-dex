@@ -71,6 +71,9 @@ contract MatchingOrderBook {
 	mapping(bytes32 => MarketDetails) public MARKET_DETAILS; // market_id -> MarketDetails
 	mapping(bytes32 => mapping(Side => uint128)) orderbooks; // marketId -> Side -> firstOrderId
 	mapping(bytes32 => mapping(Side => mapping(uint128 => Order))) orders; // marketId -> Side -> orderId -> Order
+	// Tokens can freeze addresses and that will cause sends to revert 
+	// Need to track failed payments so users can get a refund later without bricking the book 
+	mapping(address => mapping(address => mapping(address => uint))) failedPayments; // user -> bankAddress -> token -> amount
 	uint128 public orderCounter = 0; // order counter increments before being saved so the first order ID saved will be 1
 	address payable protocolFeeReceiver;
 	uint protocolFeePercent = 50; // Protocol fee as a percent of market fee. MAX 50.
@@ -173,7 +176,10 @@ contract MatchingOrderBook {
 					if (quoteQuantityMinusFees > 0) {
 						Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
 					}
-					Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
+					try Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.baseToken, fillBaseQuantity) {} 
+					catch { // failed payment likely from address freeze in contract
+						failedPayments[fillOrder.user][marketDetails.bankAddress][marketDetails.baseToken] += fillBaseQuantity;
+					}
 					if (takerFee > 0) {
 						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
 					}
@@ -185,7 +191,10 @@ contract MatchingOrderBook {
 					uint protocolFee = fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
 					if (fillQuoteQuantity > 0) {
-						Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
+						try Bank(marketDetails.bankAddress).withdrawTo(fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity) {}
+						catch { // failed payment likely from address freeze in contract
+							failedPayments[fillOrder.user][marketDetails.bankAddress][marketDetails.quoteToken] += fillQuoteQuantity;
+						}
 					}
 					if (takerFee > 0) {
 						Bank(marketDetails.bankAddress).withdrawTo(marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
@@ -310,16 +319,31 @@ contract MatchingOrderBook {
 		}
 
 		if (side == Side.SELL) {
-			Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.baseToken, order.baseQuantity);
+			try Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.baseToken, order.baseQuantity) {}
+			catch { // failed payment likely from address freeze in contract
+				failedPayments[order.user][marketDetails.bankAddress][marketDetails.baseToken] += order.baseQuantity;
+			}
 		} else if (side == Side.BUY) {
 			(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(marketDetails.baseToken).tryGetDecimals();
 			require(decimalCallSuccess, "failed to get decimals for token");
 			uint quoteQuantity = order.baseQuantity * order.price / 10**baseTokenDecimals;
 			if (quoteQuantity > 0) { // sanity check
-				Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.quoteToken, quoteQuantity);
+				try Bank(marketDetails.bankAddress).withdrawTo(order.user, marketDetails.quoteToken, quoteQuantity) {}
+				catch { // failed payment likely from address freeze in contract
+					failedPayments[order.user][marketDetails.bankAddress][marketDetails.quoteToken] += quoteQuantity;
+				}
 			}
 		}
 		emit OrderCanceled(orderId);
+		reentrancyGuard = false;
+	}
+
+	function withdrawFailedPayment(address bankAddress, address token) public {
+		require(!reentrancyGuard, "malicious attack");
+		reentrancyGuard = true;
+		uint amountToSend = failedPayments[msg.sender][bankAddress][token];
+		failedPayments[msg.sender][bankAddress][token] = 0;
+		Bank(bankAddress).withdrawTo(msg.sender, token, amountToSend);
 		reentrancyGuard = false;
 	}
 
