@@ -139,6 +139,7 @@ contract MatchingOrderBook {
 				require(transferredQuoteQuantity > 0, "transferred quote quantity is zero");
 				placeOrderVars.quoteQuantity = transferredQuoteQuantity;
 				price = transferredQuoteQuantity * 10**baseTokenDecimals / baseQuantity;
+				require(price > 0, "adjusted price is zero");
 			}
 		}
 
