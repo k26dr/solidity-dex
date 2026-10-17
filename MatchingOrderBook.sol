@@ -177,25 +177,15 @@ contract MatchingOrderBook {
 						Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
 					}
 					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
-					if (takerFee > 0) {
-						_payOrPark(marketDetails.bankAddress, marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
-					}
-					if (protocolFee > 0) {
-						_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
-					}
+					_payOrPark(marketDetails.bankAddress, marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
+					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
 				} else {
 					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
-					if (fillQuoteQuantity > 0) {
-						_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
-					}
-					if (takerFee > 0) {
-						_payOrPark(marketDetails.bankAddress, marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
-					}
-					if (protocolFee > 0) {
-						_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.baseToken, protocolFee);
-					}
+					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
+					_payOrPark(marketDetails.bankAddress, marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
+					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.baseToken, protocolFee);
 				}
 
 				if (baseQuantity >= fillOrder.baseQuantity) {
@@ -318,9 +308,7 @@ contract MatchingOrderBook {
 			(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(marketDetails.baseToken).tryGetDecimals();
 			require(decimalCallSuccess, "failed to get decimals for token");
 			uint quoteQuantity = order.baseQuantity * order.price / 10**baseTokenDecimals;
-			if (quoteQuantity > 0) { // sanity check
-				_payOrPark(marketDetails.bankAddress, order.user, marketDetails.quoteToken, quoteQuantity);
-			}
+			_payOrPark(marketDetails.bankAddress, order.user, marketDetails.quoteToken, quoteQuantity);
 		}
 		emit OrderCanceled(orderId);
 		reentrancyGuard = false;
