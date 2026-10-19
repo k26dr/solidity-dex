@@ -1434,6 +1434,7 @@ contract MatchingOrderBookTest is Test {
 	// TODO: Tests for ERC1363 payable tokens
 	// TODO: Tests for malicious re-entry using ERC1363 tokens
 	// TODO: Tests for frozen addresses using ERC20 censorable tokens
+	// TODO: Tests for ending protocol fee
 
 
 
