@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../MatchingOrderBook.sol"; 
 import "../libraries/MockERC20.sol"; 
+import "./FeeOnTransferERC20.sol";
 
 contract MatchingOrderBookTest is Test {
 	MatchingOrderBook orderBook;
@@ -1430,7 +1431,111 @@ contract MatchingOrderBookTest is Test {
 		orderBook.updateProtocolFee(80);
 	}
 
-	// TODO: Tests for fee-for-transfer tokens
+	// Fee-on-transfer token burns 1% of every transfer, including transfers into and out of the bank
+	function testFeeOnTransferBaseToken() public {
+		FeeOnTransferERC20 TAX = new FeeOnTransferERC20("TAX", "Taxed Token", 6, 100);
+		orderBook.createMarket(address(TAX), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(TAX), address(USDC), 0, 0, 0, 1, address(0x0));
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		TAX.mint(user2, 100e6);
+		USDC.mint(user3, 100e6);
+		vm.prank(user2);
+		TAX.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+
+		// sell 100 TAX: bank only receives 99, so the order is recorded as 99
+		vm.prank(user2);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 99e6);
+		assertEq(TAX.balanceOf(user2), 0);
+		assertEq(TAX.balanceOf(bank), 99e6);
+		assertEq(TAX.totalSupply(), 99e6);
+
+		// buy 50: bank sends 50 TAX and the buyer receives 49.5
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 50e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 49e6);
+		assertEq(TAX.balanceOf(bank), 49e6);
+		assertEq(TAX.balanceOf(user3), 49.5e6);
+		assertEq(USDC.balanceOf(user2), 50e6);
+		assertEq(USDC.balanceOf(user3), 50e6);
+
+		// buy the remaining 49: buyer receives 48.51 and the order is removed
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 49e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+		assertEq(TAX.balanceOf(bank), 0);
+		assertEq(TAX.balanceOf(user3), 98.01e6);
+		assertEq(TAX.totalSupply(), 98.01e6);
+		assertEq(USDC.balanceOf(user2), 99e6);
+		assertEq(USDC.balanceOf(user3), 1e6);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	function testFeeOnTransferQuoteToken() public {
+		FeeOnTransferERC20 TAX = new FeeOnTransferERC20("TAX", "Taxed Token", 6, 100);
+		orderBook.createMarket(address(EURT), address(TAX), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(TAX), 0, 0, 0, 1, address(0x0));
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		TAX.mint(user2, 100e6);
+		EURT.mint(user3, 100e6);
+		vm.prank(user2);
+		TAX.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		EURT.approve(address(orderBook), 100e18);
+
+		// buy 100 EURT at 1.00: bank only receives 99 TAX, so the price is lowered to 0.99
+		vm.prank(user2);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		MatchingOrderBook.Order memory order = orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId);
+		assertEq(order.baseQuantity, 100e6);
+		assertEq(order.price, 0.99e6);
+		assertEq(TAX.balanceOf(user2), 0);
+		assertEq(TAX.balanceOf(bank), 99e6);
+
+		// sell 40 EURT into the bid: bank sends 39.6 TAX and the seller receives 39.204
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 40e6, 0.99e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId).baseQuantity, 60e6);
+		assertEq(TAX.balanceOf(bank), 59.4e6);
+		assertEq(TAX.balanceOf(user3), 39.204e6);
+		assertEq(EURT.balanceOf(user2), 40e6);
+
+		// sell the remaining 60 EURT: seller receives another 58.806 TAX and the order is removed
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 60e6, 0.99e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+		assertEq(TAX.balanceOf(bank), 0);
+		assertEq(TAX.balanceOf(user3), 98.01e6);
+		assertEq(TAX.totalSupply(), 98.01e6);
+		assertEq(EURT.balanceOf(user2), 100e6);
+		assertEq(EURT.balanceOf(user3), 0);
+	}
+
+	function testFeeOnTransferCancelOrder() public {
+		FeeOnTransferERC20 TAX = new FeeOnTransferERC20("TAX", "Taxed Token", 6, 100);
+		orderBook.createMarket(address(TAX), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(TAX), address(USDC), 0, 0, 0, 1, address(0x0));
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		TAX.mint(user2, 100e6);
+		vm.prank(user2);
+		TAX.approve(address(orderBook), 100e18);
+
+		vm.prank(user2);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 99e6);
+
+		// cancel refunds the recorded 99, of which the user receives 98.01
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, orderId);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 0);
+		assertEq(TAX.balanceOf(bank), 0);
+		assertEq(TAX.balanceOf(user2), 98.01e6);
+	}
+
 	// TODO: Tests for ERC1363 payable tokens
 	// TODO: Tests for malicious re-entry using ERC1363 tokens
 	// TODO: Tests for frozen addresses using ERC20 censorable tokens
