@@ -100,6 +100,7 @@ contract MatchingOrderBook {
 
 	function endProtocolFee() public {
 		require(msg.sender == protocolFeeReceiver, "only protocol fee receiver can lock protocol fee");
+		protocolFeePercent = 0;
 		protocolFeeLocked = true;
 		protocolFeeReceiver = payable(address(0));
 	}
