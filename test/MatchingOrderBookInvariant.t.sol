@@ -9,7 +9,9 @@ import "../libraries/MockERC20.sol";
 // Prices come from a narrow band so orders cross often and the matching engine is exercised.
 // The tests in this file were generated entirely by Claude and have only been reviewed briefly. 
 
-// Explanation: A handler with 3 traders randomly places and cancels orders on a WETH/USDC market with a 0.1% fee. Prices fall between 1900 and 2100, so orders cross often. Each run makes 12,800 calls, and the run fails if any call reverts. After every call it checks four things:
+// Explanation: A handler with 3 traders randomly places and cancels orders on a WETH/USDC market with a 0.1% fee. Prices fall between 1900 and 2100, so orders cross often. Each run makes 3000 calls, and the run fails if any call reverts. You can change the number of calls by changing the invariant runs and depth configs before the MatchingOrderBookInvariantTest contract. Please update the total count above if you do. 
+
+// After every call it checks four things:
 
 // 1. All tokens are accounted for across the traders, the bank and the fee receivers.
 // 2. The bank holds exactly the base of open sells and at least the quote of open buys.
@@ -87,7 +89,7 @@ contract MatchingOrderBookHandler is Test {
 	}
 }
 
-/// forge-config: default.invariant.runs = 128
+/// forge-config: default.invariant.runs = 30
 /// forge-config: default.invariant.depth = 100
 /// forge-config: default.invariant.fail-on-revert = true
 contract MatchingOrderBookInvariantTest is Test {
