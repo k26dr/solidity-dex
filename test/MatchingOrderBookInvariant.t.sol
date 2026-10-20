@@ -8,11 +8,13 @@ import "../libraries/MockERC20.sol";
 // Drives random place and cancel calls against one WETH / USDC market with a 0.1% fee.
 // Prices come from a narrow band so orders cross often and the matching engine is exercised.
 // The tests in this file were generated entirely by Claude and have only been reviewed briefly. 
-// If they fail some kind of manual review will be required to see what's wrong with them
-// It is ok to delete them if necessary
-// It is a comprehensive set of fuzz tests and it would be preferable to keep it if possible
-// The tests are really slow maybe because the default number of runs is really high
-// It might be useful to dial that down for faster testing
+
+// Explanation: A handler with 3 traders randomly places and cancels orders on a WETH/USDC market with a 0.1% fee. Prices fall between 1900 and 2100, so orders cross often. Each run makes 12,800 calls, and the run fails if any call reverts. After every call it checks four things:
+
+// 1. All tokens are accounted for across the traders, the bank and the fee receivers.
+// 2. The bank holds exactly the base of open sells and at least the quote of open buys.
+// 3. Both sides of the book are correctly linked and sorted best price first, with no empty orders.
+// 4. The book is never crossed, meaning the best bid is always below the best ask.
 
 contract MatchingOrderBookHandler is Test {
 	MatchingOrderBook public orderBook;
