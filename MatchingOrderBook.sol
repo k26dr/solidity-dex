@@ -373,4 +373,8 @@ contract MatchingOrderBook {
 		}
 		return returnOrders;
 	}
+
+	function failedPaymentBalance(address user, address bank, address token) external view returns (uint) {
+		return failedPayments[user][bank][token];
+	}
 }
