@@ -1630,8 +1630,54 @@ contract MatchingOrderBookTest is Test {
 		assertEq(PAY.balanceOf(bank), 0);
 	}
 
+	// After endProtocolFee the whole 0.1% market fee goes to the market's feeReceiver and nothing to the protocol
+	function testEndProtocolFee() public {
+		vm.prank(protocolFeeReceiver);
+		orderBook.endProtocolFee();
+
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1, 1000, feeReceiver);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 1, 1000, feeReceiver);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		EURT.mint(user2, 2000e6);
+		USDC.mint(user3, 2000e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+
+		// taker buys 1000 EURT: 0.1% fee of 1 EURT is taken from the base received
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		assertEq(EURT.balanceOf(user3), 999e6);
+		assertEq(USDC.balanceOf(user2), 1000e6);
+		assertEq(EURT.balanceOf(feeReceiver), 1e6);
+		assertEq(EURT.balanceOf(protocolFeeReceiver), 0);
+
+		// taker sells 1000 EURT: 0.1% fee of 1 USDC is taken from the quote received
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		assertEq(EURT.balanceOf(user3), 1999e6);
+		assertEq(USDC.balanceOf(user2), 1999e6);
+		assertEq(USDC.balanceOf(feeReceiver), 1e6);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 0);
+
+		// protocol receives nothing and nothing is left parked in the bank
+		assertEq(EURT.balanceOf(protocolFeeReceiver), 0);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 0);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(USDC.balanceOf(bank), 0);
+
+		// the old protocol fee receiver can no longer turn the fee back on
+		vm.expectRevert("only protocol fee receiver can set new percentage");
+		vm.prank(protocolFeeReceiver);
+		orderBook.updateProtocolFee(50);
+	}
+
 	// TODO: Tests for frozen addresses using ERC20 censorable tokens
-	// TODO: Tests for ending protocol fee
 	// TODO: Test dust orders
 	// TODO: Test attempt to create a market with same base/quote pair (should fail)
 
