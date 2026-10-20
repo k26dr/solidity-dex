@@ -1776,8 +1776,62 @@ contract MatchingOrderBookTest is Test {
 		assertEq(FRZ.balanceOf(bank), 100e6);
 	}
 
-	// TODO: Test dust orders
-	// TODO: Test attempt to create a market with same base/quote pair (should fail)
+	// A partial fill leaves a 1 unit sell at 0.5, whose quote value rounds to 0. Check that it does not brick the book.
+	function testDustOrderZeroQuoteFill() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		EURT.mint(user2, 1000e6);
+		USDC.mint(user3, 1000e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+
+		// sell 3 units at 0.5 (quote 1), then buy 2 units for 1 quote, leaving a 1 unit dust order
+		vm.prank(user2);
+		uint128 dustId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 3, 0.5e6);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2, 0.5e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, dustId).baseQuantity, 1);
+		assertEq(EURT.balanceOf(user3), 2);
+		assertEq(USDC.balanceOf(user2), 1);
+
+		// the dust can't be bought on its own because the quote rounds to 0
+		vm.expectRevert("calculated quote quantity is zero");
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 0.5e6);
+
+		// a normal sell posts behind the dust
+		vm.prank(user2);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), dustId);
+
+		// a normal buy sweeps the dust for 0 quote and then fills against the next order
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 10e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, dustId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), askId);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 100e6 - 10e6 + 1);
+		assertEq(EURT.balanceOf(user3), 2 + 10e6);
+		// maker received nothing for the dust unit, and the taker's unused 1 quote unit was refunded
+		assertEq(USDC.balanceOf(user2), 1 + 10e6 - 1);
+		assertEq(USDC.balanceOf(user3), 1000e6 - 1 - (10e6 - 1));
+		assertEq(USDC.balanceOf(bank), 0);
+		assertEq(EURT.balanceOf(bank), 100e6 - 10e6 + 1);
+
+		// the book still works: cancel returns the rest and leaves the bank empty
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, askId);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(EURT.balanceOf(user2), 1000e6 - 3 - 10e6 + 1);
+	}
+
+	function testCreateMarketSameBaseAndQuoteFail() public {
+		vm.expectRevert("base and quote token must be different");
+		orderBook.createMarket(address(USDC), address(USDC), 0, 0, 0, 1, address(0x0));
+	}
 
 
 
