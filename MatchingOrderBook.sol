@@ -57,6 +57,7 @@ contract MatchingOrderBook {
 		uint quoteMinPostSize;
 		uint feeNumerator;
 		uint feeDenominator;
+		uint baseTokenDecimals;
 		address payable feeReceiver;
 		address payable bankAddress;
 	}
@@ -82,12 +83,18 @@ contract MatchingOrderBook {
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
-	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver, address bankAddress);
+	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address feeReceiver, address bankAddress);
 	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
 
-	constructor(address payable _protocolFeeReceiver) {
-		require (_protocolFeeReceiver != address(0), "must set protocol fee receiver");
+	constructor(address payable _protocolFeeReceiver, uint _protocolFeePercent) {
+		// initial conditions can be protocolFeeReceiver=address(0) and protocolFeePercent=0 if you want
+		// if you do that, the protocol fee will permanently be 0
+		if (_protocolFeePercent > 0) {
+			require(_protocolFeeReceiver != address(0), "must set protocol fee receiver");
+		}
+		require(_protocolFeePercent <= 50, "Max protocol fee is 50 percent of market fee");
 		protocolFeeReceiver = _protocolFeeReceiver;
+		protocolFeePercent = _protocolFeePercent;
 	}
 
 	function updateProtocolFee(uint percent) public {
@@ -112,8 +119,10 @@ contract MatchingOrderBook {
 		bytes32 marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver);
 		require(MARKET_DETAILS[marketId].bankAddress == address(0), "market has already been created");
 		address payable bankAddress = payable(address(new Bank(address(this))));
-		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, payable(feeReceiver), bankAddress);
-		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver, bankAddress);
+		(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(baseToken).tryGetDecimals();
+		require(decimalCallSuccess, "failed to get decimals for token");
+		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, payable(feeReceiver), bankAddress);
+		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, feeReceiver, bankAddress);
 		reentrancyGuard = false;
 	}
 
@@ -125,9 +134,7 @@ contract MatchingOrderBook {
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
 		require(baseQuantity > 0 && price > 0, "zero quantity/price orders not permitted");
 
-		(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(marketDetails.baseToken).tryGetDecimals();
-		require(decimalCallSuccess, "failed to get decimals for token");
-		placeOrderVars.quoteQuantity = baseQuantity * price / 10**baseTokenDecimals;
+		placeOrderVars.quoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
 		require(placeOrderVars.quoteQuantity > 0, "calculated quote quantity is zero");
 
 		// This is to transfer tokens into the contract
@@ -142,7 +149,7 @@ contract MatchingOrderBook {
 			uint transferredBaseQuantity = afterBalance - beforeBalance;
 			if (transferredBaseQuantity != baseQuantity) {
 				baseQuantity = transferredBaseQuantity;
-				placeOrderVars.quoteQuantity = baseQuantity * price / 10**baseTokenDecimals;
+				placeOrderVars.quoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
 				require(placeOrderVars.quoteQuantity > 0, "calculated quote quantity is zero");
 			}
 		} else if (side == Side.BUY) {
@@ -154,7 +161,7 @@ contract MatchingOrderBook {
 			if (transferredQuoteQuantity != placeOrderVars.quoteQuantity) {
 				require(transferredQuoteQuantity > 0, "transferred quote quantity is zero");
 				placeOrderVars.quoteQuantity = transferredQuoteQuantity;
-				price = transferredQuoteQuantity * 10**baseTokenDecimals / baseQuantity;
+				price = transferredQuoteQuantity * 10**marketDetails.baseTokenDecimals / baseQuantity;
 				require(price > 0, "adjusted price is zero");
 			}
 		}
@@ -178,7 +185,7 @@ contract MatchingOrderBook {
 
 				placeOrderVars.fillOccurred = true;
 				uint fillBaseQuantity = (baseQuantity > fillOrder.baseQuantity) ? fillOrder.baseQuantity : baseQuantity;
-				uint fillQuoteQuantity = fillBaseQuantity * fillOrder.price / 10**baseTokenDecimals;
+				uint fillQuoteQuantity = fillBaseQuantity * fillOrder.price / 10**marketDetails.baseTokenDecimals;
 				placeOrderVars.usedQuoteQuantity += fillQuoteQuantity;
 				emit OrderFill(placeOrderVars.fillOrderId, fillOrder.user, msg.sender, marketId, fillBaseQuantity, fillOrder.price);
 
@@ -234,7 +241,7 @@ contract MatchingOrderBook {
 
 		// Block scope this to avoid too many local variables
 		{
-			uint postQuoteQuantity = baseQuantity * price / 10**baseTokenDecimals;
+			uint postQuoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
 			bool canPost = baseQuantity >= marketDetails.baseMinPostSize && postQuoteQuantity >= marketDetails.quoteMinPostSize;
 			require(placeOrderVars.fillOccurred || canPost, "order was too small to post. ran as fill or kill and failed to fill.");
 
@@ -318,9 +325,7 @@ contract MatchingOrderBook {
 		if (side == Side.SELL) {
 			_payOrPark(marketDetails.bankAddress, order.user, marketDetails.baseToken, order.baseQuantity);
 		} else if (side == Side.BUY) {
-			(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(marketDetails.baseToken).tryGetDecimals();
-			require(decimalCallSuccess, "failed to get decimals for token");
-			uint quoteQuantity = order.baseQuantity * order.price / 10**baseTokenDecimals;
+			uint quoteQuantity = order.baseQuantity * order.price / 10**marketDetails.baseTokenDecimals;
 			_payOrPark(marketDetails.bankAddress, order.user, marketDetails.quoteToken, quoteQuantity);
 		}
 		emit OrderCanceled(orderId);

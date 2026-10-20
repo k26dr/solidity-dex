@@ -29,7 +29,7 @@ contract MatchingOrderBookTest is Test {
 		WETH = new MockERC20("WETH", "WETH", 18);
 		WBTC = new MockERC20("WBTC", "Wrapped Bitcoin", 8);
 		AAPL = new MockERC20("AAPL", "Apple", 0);
-		orderBook = new MatchingOrderBook(payable(protocolFeeReceiver));
+		orderBook = new MatchingOrderBook(payable(protocolFeeReceiver), 50);
 		USDC.mint(user1, 10000e6);
 		vm.prank(user1);
 		USDC.approve(address(orderBook), 100e18);
@@ -1833,6 +1833,137 @@ contract MatchingOrderBookTest is Test {
 		orderBook.createMarket(address(USDC), address(USDC), 0, 0, 0, 1, address(0x0));
 	}
 
+	// Taker sell fills 100 of 105 and the 5 EURT leftover is below the 10 EURT minimum, so it is refunded instead of posted
+	function testTakerSellLeftoverTooSmallRefunded() public {
+		orderBook.createMarket(address(EURT), address(USDC), 10e6, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 10e6, 0, 0, 1, address(0x0));
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		EURT.mint(user2, 105e6);
+		USDC.mint(user3, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
 
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		vm.prank(user2);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 105e6, 1e6);
 
+		assertEq(orderId, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+		assertEq(EURT.balanceOf(user2), 5e6);
+		assertEq(USDC.balanceOf(user2), 100e6);
+		assertEq(EURT.balanceOf(user3), 100e6);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// Order below the minimum with nothing to fill against runs as fill or kill and reverts
+	function testFillOrKillNoFillReverts() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
+		vm.expectRevert("order was too small to post. ran as fill or kill and failed to fill.");
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 5e6, 1e6);
+		assertEq(USDC.balanceOf(user1), 10000e6);
+	}
+
+	function testZeroQuantityOrPriceReverts() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
+		vm.expectRevert("zero quantity/price orders not permitted");
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 0, 1e6);
+		vm.expectRevert("zero quantity/price orders not permitted");
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e6, 0);
+	}
+
+	// Base token is an address with no code, so decimals() returns nothing
+	function testTokenWithoutDecimalsReverts() public {
+		address noDecimals = address(0x1234);
+		vm.expectRevert("failed to get decimals for token");
+		orderBook.createMarket(noDecimals, address(USDC), 0, 0, 0, 1, address(0x0));
+	}
+
+	// Fee-on-transfer token that burns 100% of a sell leaves a quote quantity of 0
+	// Not realistic but needed a test where the fee-on-transfer takes away the full amount
+	function testFeeOnTransferSellNothingReceivedReverts() public {
+		FeeOnTransferERC20 TAX = new FeeOnTransferERC20("TAX", "Taxed Token", 6, 10000);
+		orderBook.createMarket(address(TAX), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(TAX), address(USDC), 0, 0, 0, 1, address(0x0));
+		TAX.mint(user2, 100e6);
+		vm.prank(user2);
+		TAX.approve(address(orderBook), 100e18);
+		vm.expectRevert("calculated quote quantity is zero");
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+	}
+
+	// Fee-on-transfer quote token that burns 100% of a buy delivers nothing to the bank
+	// Not realistic but needed a test where the fee-on-transfer takes away the full amount
+	function testFeeOnTransferBuyNothingReceivedReverts() public {
+		FeeOnTransferERC20 TAX = new FeeOnTransferERC20("TAX", "Taxed Token", 6, 10000);
+		orderBook.createMarket(address(EURT), address(TAX), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(TAX), 0, 0, 0, 1, address(0x0));
+		TAX.mint(user2, 100e6);
+		vm.prank(user2);
+		TAX.approve(address(orderBook), 100e18);
+		vm.expectRevert("transferred quote quantity is zero");
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+	}
+
+	// 99.99% fee leaves 100 units of quote for 1e12 base, so the adjusted price rounds to 0
+	function testFeeOnTransferBuyAdjustedPriceZeroReverts() public {
+		FeeOnTransferERC20 TAX = new FeeOnTransferERC20("TAX", "Taxed Token", 6, 9999);
+		orderBook.createMarket(address(EURT), address(TAX), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(TAX), 0, 0, 0, 1, address(0x0));
+		TAX.mint(user2, 100e6);
+		vm.prank(user2);
+		TAX.approve(address(orderBook), 100e18);
+		vm.expectRevert("adjusted price is zero");
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e12, 1);
+	}
+
+	function testEndProtocolFeeWrongUserReverts() public {
+		vm.expectRevert("only protocol fee receiver can lock protocol fee");
+		vm.prank(user1);
+		orderBook.endProtocolFee();
+	}
+
+	function testConstructorZeroAddressesRevert() public {
+		vm.expectRevert("must set protocol fee receiver");
+		new MatchingOrderBook(payable(address(0)), 30);
+		vm.expectRevert("must set owner");
+		new Bank(address(0));
+	}
+
+	function testConstructorZeroAddressandAmount() public {
+		new MatchingOrderBook(payable(address(0)), 0);
+	}
+
+	function testBankZeroAmountReverts() public {
+		Bank bank = new Bank(address(this));
+		vm.expectRevert("amount is zero");
+		bank.withdrawTo(user1, address(USDC), 0);
+	}
+
+	// Taker receives PAY directly and re-enters createMarket from the token callback
+	function testReentryCreateMarketReverts() public {
+		(PayableERC20 PAY, bytes32 marketId, , ReentrantReceiver attacker) = _setUpPayableMarket();
+		PAY.mint(user2, 100e6);
+		vm.prank(user2);
+		PAY.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		EURT.mint(address(attacker), 100e6);
+
+		attacker.setAttack(ReentrantReceiver.Attack.CREATE_MARKET);
+		vm.expectRevert("malicious attack");
+		attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
+	}
 }

@@ -84,7 +84,8 @@ contract ReentrantReceiver is ITransferReceiver {
 		NONE,
 		PLACE_ORDER,
 		CANCEL_ORDER,
-		WITHDRAW_FAILED_PAYMENT
+		WITHDRAW_FAILED_PAYMENT,
+		CREATE_MARKET
 	}
 
 	MatchingOrderBook orderBook;
@@ -123,6 +124,8 @@ contract ReentrantReceiver is ITransferReceiver {
 			orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, 1);
 		} else if (attack == Attack.WITHDRAW_FAILED_PAYMENT) {
 			orderBook.withdrawFailedPayment(orderBook.getMarketDetails(marketId).bankAddress, msg.sender);
+		} else if (attack == Attack.CREATE_MARKET) {
+			orderBook.createMarket(address(1), address(2), 0, 0, 0, 1, address(0x0));
 		}
 		return ITransferReceiver.onTransferReceived.selector;
 	}
