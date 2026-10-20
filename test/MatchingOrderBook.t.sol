@@ -1966,4 +1966,54 @@ contract MatchingOrderBookTest is Test {
 		vm.expectRevert("malicious attack");
 		attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
 	}
+
+	function testConstructorProtocolFeeOver50Reverts() public {
+		vm.expectRevert("Max protocol fee is 50 percent of market fee");
+		new MatchingOrderBook(payable(protocolFeeReceiver), 51);
+	}
+
+	// Book deployed with no protocol fee receiver and 0% protocol fee: the whole 0.1% market fee goes to the feeReceiver
+	function testTradeWithNoProtocolFee() public {
+		MatchingOrderBook book = new MatchingOrderBook(payable(address(0)), 0);
+		book.createMarket(address(EURT), address(USDC), 0, 0, 1, 1000, feeReceiver);
+		bytes32 marketId = book.getMarketId(address(EURT), address(USDC), 0, 0, 1, 1000, feeReceiver);
+		address bank = book.getMarketDetails(marketId).bankAddress;
+		EURT.mint(user2, 2000e6);
+		USDC.mint(user3, 2000e6);
+		vm.prank(user2);
+		EURT.approve(address(book), 100e18);
+		vm.prank(user3);
+		USDC.approve(address(book), 100e18);
+
+		// taker buys 1000 EURT: 1 EURT fee
+		vm.prank(user2);
+		book.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		vm.prank(user3);
+		book.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		assertEq(EURT.balanceOf(user3), 999e6);
+		assertEq(USDC.balanceOf(user2), 1000e6);
+		assertEq(EURT.balanceOf(feeReceiver), 1e6);
+
+		// taker sells 1000 EURT: 1 USDC fee
+		vm.prank(user3);
+		book.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		vm.prank(user2);
+		book.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		assertEq(EURT.balanceOf(user3), 1999e6);
+		assertEq(USDC.balanceOf(user2), 1999e6);
+		assertEq(USDC.balanceOf(feeReceiver), 1e6);
+
+		// nothing is held for address(0) and the bank is empty
+		assertEq(book.failedPaymentBalance(address(0), bank, address(EURT)), 0);
+		assertEq(book.failedPaymentBalance(address(0), bank, address(USDC)), 0);
+		assertEq(USDC.balanceOf(address(0)), 0);
+		assertEq(EURT.balanceOf(address(0)), 0);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(USDC.balanceOf(bank), 0);
+
+		// nobody can turn the protocol fee on
+		vm.expectRevert("only protocol fee receiver can set new percentage");
+		vm.prank(user1);
+		book.updateProtocolFee(50);
+	}
 }
