@@ -6,6 +6,7 @@ import "../MatchingOrderBook.sol";
 import "../libraries/MockERC20.sol"; 
 import "./FeeOnTransferERC20.sol";
 import "./PayableERC20.sol";
+import "./FreezableERC20.sol";
 
 contract MatchingOrderBookTest is Test {
 	MatchingOrderBook orderBook;
@@ -1677,7 +1678,104 @@ contract MatchingOrderBookTest is Test {
 		orderBook.updateProtocolFee(50);
 	}
 
-	// TODO: Tests for frozen addresses using ERC20 censorable tokens
+	// Market is EURT / FRZ so payments in the quote token can be blocked by freezing the recipient
+	function _setUpFreezableMarket() internal returns (FreezableERC20 FRZ, bytes32 marketId, address bank) {
+		FRZ = new FreezableERC20("FRZ", "Freezable Token", 6);
+		orderBook.createMarket(address(EURT), address(FRZ), 0, 0, 0, 1, address(0x0));
+		marketId = orderBook.getMarketId(address(EURT), address(FRZ), 0, 0, 0, 1, address(0x0));
+		bank = orderBook.getMarketDetails(marketId).bankAddress;
+	}
+
+	// A frozen maker cannot block the taker. Its payment is parked and withdrawn after it is unfrozen.
+	function testFrozenMakerPaymentParked() public {
+		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
+		EURT.mint(user2, 100e6);
+		FRZ.mint(user3, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		FRZ.approve(address(orderBook), 100e18);
+
+		vm.prank(user2);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		FRZ.freeze(user2);
+
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+
+		// trade completes for the taker and the maker's 100 FRZ stays in the bank
+		assertEq(EURT.balanceOf(user3), 100e6);
+		assertEq(FRZ.balanceOf(user3), 0);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+		assertEq(FRZ.balanceOf(user2), 0);
+		assertEq(FRZ.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+
+		// withdrawing while still frozen fails and keeps the parked balance
+		vm.expectRevert("ERC20: recipient is frozen");
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		assertEq(FRZ.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+
+		// once unfrozen the maker withdraws the full amount, and only once
+		FRZ.unfreeze(user2);
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		assertEq(FRZ.balanceOf(user2), 100e6);
+		assertEq(FRZ.balanceOf(bank), 0);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
+		vm.expectRevert("no failed payment balance for user+bank+token combo");
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(bank, address(FRZ));
+	}
+
+	// A frozen user can still cancel. The refund is parked and withdrawn after it is unfrozen.
+	function testFrozenCancelRefundParked() public {
+		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
+		FRZ.mint(user2, 100e6);
+		vm.prank(user2);
+		FRZ.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		FRZ.freeze(user2);
+
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+		assertEq(FRZ.balanceOf(user2), 0);
+		assertEq(FRZ.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+
+		FRZ.unfreeze(user2);
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		assertEq(FRZ.balanceOf(user2), 100e6);
+		assertEq(FRZ.balanceOf(bank), 0);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
+	}
+
+	// A frozen taker is paid directly, so the whole trade reverts and the maker's order is untouched
+	function testFrozenTakerReverts() public {
+		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
+		FRZ.mint(user2, 100e6);
+		EURT.mint(user3, 100e6);
+		vm.prank(user2);
+		FRZ.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		FRZ.freeze(user3);
+
+		vm.expectRevert("ERC20: recipient is frozen");
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6);
+		assertEq(EURT.balanceOf(user3), 100e6);
+		assertEq(FRZ.balanceOf(bank), 100e6);
+	}
+
 	// TODO: Test dust orders
 	// TODO: Test attempt to create a market with same base/quote pair (should fail)
 

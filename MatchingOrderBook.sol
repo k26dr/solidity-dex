@@ -34,7 +34,6 @@ contract Bank {
 	function withdrawTo(address user, address token, uint amount) external {
 		require(msg.sender == owner, "only owner can withdraw funds");
 		require(amount > 0, "amount is zero");
-
 		IERC20(token).safeTransfer(user, amount);
 	}
 }
@@ -332,6 +331,7 @@ contract MatchingOrderBook {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		uint amountToSend = failedPayments[msg.sender][bankAddress][token];
+		require(amountToSend > 0, "no failed payment balance for user+bank+token combo");
 		failedPayments[msg.sender][bankAddress][token] = 0;
 		Bank(bankAddress).withdrawTo(msg.sender, token, amountToSend);
 		reentrancyGuard = false;
