@@ -1,6 +1,6 @@
 # On-Chain Matching Engine in Solidity
 
-There are 2 versions of Solidity orderbooks in this repo. The primary one is [MatchingOrderBook.sol](MatchingOrderBook.sol). 
+The primary contract here is [MatchingOrderBook.sol](MatchingOrderBook.sol). 
 
 Market creators can set custom fees and fee receivers on that one so anyone can use this as a way to make revenue. There is a protocol fee built in that by default takes 50% of the fee, and can be set anywhere between 0 and 50% of the overall market fee. 
 
@@ -16,4 +16,4 @@ A frontend is under development.
 
 # Non-matching version
 
-The non-matching version is a scalable system for high-fee chains like Ethereum that allows for decentralized operation via an indexer that can be run locally or remotely: [Orderbook.sol](OrderBook.sol). There are no order minimums and the design optimizes gas to keep execution prices low.
+The non-matching version [OrderBook.sol](OrderBook.sol) is deprecated and has too many race condition issues. It was a test from the past and is left in the repo for legacy purposes. It wasn't audited and might have issues with draining ETH. Don't use it. It's a relic. 
