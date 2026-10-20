@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../MatchingOrderBook.sol"; 
 import "../libraries/MockERC20.sol"; 
 import "./FeeOnTransferERC20.sol";
+import "./PayableERC20.sol";
 
 contract MatchingOrderBookTest is Test {
 	MatchingOrderBook orderBook;
@@ -1536,8 +1537,99 @@ contract MatchingOrderBookTest is Test {
 		assertEq(TAX.balanceOf(user2), 98.01e6);
 	}
 
-	// TODO: Tests for ERC1363 payable tokens
-	// TODO: Tests for malicious re-entry using ERC1363 tokens
+	// Payable token calls back into the receiver on every transfer. Market is EURT / PAY so the quote token carries the hook.
+	function _setUpPayableMarket() internal returns (PayableERC20 PAY, bytes32 marketId, address bank, ReentrantReceiver attacker) {
+		PAY = new PayableERC20("PAY", "Payable Token", 6);
+		orderBook.createMarket(address(EURT), address(PAY), 0, 0, 0, 1, address(0x0));
+		marketId = orderBook.getMarketId(address(EURT), address(PAY), 0, 0, 0, 1, address(0x0));
+		bank = orderBook.getMarketDetails(marketId).bankAddress;
+		attacker = new ReentrantReceiver(orderBook, marketId);
+		attacker.approve(address(EURT));
+		attacker.approve(address(PAY));
+	}
+
+	// Taker payouts are sent directly, so a re-entering taker reverts the whole trade
+	function testReentryAsTakerReverts() public {
+		(PayableERC20 PAY, bytes32 marketId, address bank, ReentrantReceiver attacker) = _setUpPayableMarket();
+		PAY.mint(user2, 100e6);
+		vm.prank(user2);
+		PAY.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		EURT.mint(address(attacker), 100e6);
+
+		attacker.setAttack(ReentrantReceiver.Attack.PLACE_ORDER);
+		vm.expectRevert("malicious attack");
+		attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
+
+		// nothing moved
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6);
+		assertEq(EURT.balanceOf(address(attacker)), 100e6);
+		assertEq(PAY.balanceOf(address(attacker)), 0);
+		assertEq(PAY.balanceOf(bank), 100e6);
+
+		// the guard is released, so an honest fill still works
+		attacker.setAttack(ReentrantReceiver.Attack.NONE);
+		attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		assertEq(PAY.balanceOf(address(attacker)), 100e6);
+		assertEq(EURT.balanceOf(user2), 100e6);
+		assertEq(PAY.balanceOf(bank), 0);
+	}
+
+	// Maker payouts go through _payOrPark, so a re-entering maker cannot block the taker and its payment is parked
+	function testReentryAsMakerParksPayment() public {
+		(PayableERC20 PAY, bytes32 marketId, address bank, ReentrantReceiver attacker) = _setUpPayableMarket();
+		EURT.mint(address(attacker), 100e6);
+		uint128 askId = attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		attacker.setAttack(ReentrantReceiver.Attack.PLACE_ORDER);
+
+		PAY.mint(user2, 100e6);
+		vm.prank(user2);
+		PAY.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+
+		// taker is paid, maker order is filled, maker's payment stays in the bank
+		assertEq(EURT.balanceOf(user2), 100e6);
+		assertEq(PAY.balanceOf(user2), 0);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+		assertEq(PAY.balanceOf(address(attacker)), 0);
+		assertEq(PAY.balanceOf(bank), 100e6);
+
+		// re-entering while withdrawing the parked payment also fails
+		attacker.setAttack(ReentrantReceiver.Attack.WITHDRAW_FAILED_PAYMENT);
+		vm.expectRevert("malicious attack");
+		attacker.withdrawFailedPayment(address(PAY));
+		assertEq(PAY.balanceOf(bank), 100e6);
+
+		// an honest withdraw recovers the parked payment
+		attacker.setAttack(ReentrantReceiver.Attack.NONE);
+		attacker.withdrawFailedPayment(address(PAY));
+		assertEq(PAY.balanceOf(address(attacker)), 100e6);
+		assertEq(PAY.balanceOf(bank), 0);
+	}
+
+	// Cancel refunds go through _payOrPark, so a re-entering canceller gets its refund parked
+	function testReentryOnCancelParksRefund() public {
+		(PayableERC20 PAY, bytes32 marketId, address bank, ReentrantReceiver attacker) = _setUpPayableMarket();
+		PAY.mint(address(attacker), 100e6);
+		uint128 bidId = attacker.placeOrder(MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		assertEq(PAY.balanceOf(bank), 100e6);
+
+		attacker.setAttack(ReentrantReceiver.Attack.CANCEL_ORDER);
+		attacker.cancelOrder(MatchingOrderBook.Side.BUY, bidId);
+
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+		assertEq(PAY.balanceOf(address(attacker)), 0);
+		assertEq(PAY.balanceOf(bank), 100e6);
+
+		attacker.setAttack(ReentrantReceiver.Attack.NONE);
+		attacker.withdrawFailedPayment(address(PAY));
+		assertEq(PAY.balanceOf(address(attacker)), 100e6);
+		assertEq(PAY.balanceOf(bank), 0);
+	}
+
 	// TODO: Tests for frozen addresses using ERC20 censorable tokens
 	// TODO: Tests for ending protocol fee
 	// TODO: Test dust orders

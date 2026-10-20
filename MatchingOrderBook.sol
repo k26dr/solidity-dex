@@ -106,6 +106,8 @@ contract MatchingOrderBook {
 	}
 
 	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) external {
+		require(!reentrancyGuard, "malicious attack");
+		reentrancyGuard = true;
 		require(feeNumerator < feeDenominator, "fee numerator must be less than the denominator");
 		require(baseToken != quoteToken, "base and quote token must be different");
 		bytes32 marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver);
@@ -113,6 +115,7 @@ contract MatchingOrderBook {
 		address payable bankAddress = payable(address(new Bank(address(this))));
 		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, payable(feeReceiver), bankAddress);
 		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver, bankAddress);
+		reentrancyGuard = false;
 	}
 
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external returns (uint128 orderId) {
