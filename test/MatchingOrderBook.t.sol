@@ -893,11 +893,6 @@ contract MatchingOrderBookTest is Test {
 			MatchingOrderBook.Side side = vm.randomUint() % 2 == 0 ? MatchingOrderBook.Side.BUY : MatchingOrderBook.Side.SELL;
 			uint baseQuantity = vm.randomUint() % 1e20;
 			uint price = vm.randomUint() % 100e6 + 1000e6;
-			//uint fillBaseQuantity = 0;
-			//uint fillQuoteQuantity = 0;
-			//MatchingOrderBook.Side otherSide = side == MatchingOrderBook.Side.BUY ? MatchingOrderBook.Side.SELL : MatchingOrderBook.Side.BUY;
-			//MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, otherSide, 100);
-			// TODO: Verify balances after each trade
 			vm.prank(user);
 			orderBook.placeOrder(marketId, side, baseQuantity, price);
 		}
