@@ -344,7 +344,7 @@ contract MatchingOrderBook {
 
 	function _payOrPark(address bank, address to, address token, uint amount) internal {
 		if (amount == 0) return;
-		try Bank(bank).withdrawTo{gas: 200e3}(to, token, amount) {}
+		try Bank(bank).withdrawTo{gas: 110e3}(to, token, amount) {}
 		catch {
 			failedPayments[to][bank][token] += amount;
 			emit PaymentFailed(to, bank, token, amount);

@@ -2236,4 +2236,27 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, BUY, idA).baseQuantity, 30e6);
 		assertEq(orderBook.getOrder(marketId, BUY, idB).baseQuantity, 100e6);
 	}
+
+	// A maker whose token callback burns all gas it is given only burns the capped payout gas, not the taker's whole budget
+	function testGasBurningMakerCannotDrainTakerGas() public {
+		(PayableERC20 PAY, bytes32 marketId, address bank, ReentrantReceiver attacker) = _setUpPayableMarket();
+		EURT.mint(address(attacker), 100e6);
+		attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		attacker.setAttack(ReentrantReceiver.Attack.BURN_GAS);
+
+		PAY.mint(user2, 100e6);
+		vm.prank(user2);
+		PAY.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint gasBefore = gasleft();
+		orderBook.placeOrder{gas: 10_000_000}(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		uint gasUsed = gasBefore - gasleft();
+
+		// without the cap the burner would eat almost all 10M gas
+		assertLt(gasUsed, 1_000_000);
+		assertEq(EURT.balanceOf(user2), 100e6);
+		// the maker's 100 PAY was either delivered or parked for withdrawal, never lost
+		assertEq(PAY.balanceOf(address(attacker)) + orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
+		assertEq(PAY.balanceOf(bank), orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)));
+	}
 }

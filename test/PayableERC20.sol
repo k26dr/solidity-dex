@@ -85,7 +85,8 @@ contract ReentrantReceiver is ITransferReceiver {
 		PLACE_ORDER,
 		CANCEL_ORDER,
 		WITHDRAW_FAILED_PAYMENT,
-		CREATE_MARKET
+		CREATE_MARKET,
+		BURN_GAS
 	}
 
 	MatchingOrderBook orderBook;
@@ -126,6 +127,8 @@ contract ReentrantReceiver is ITransferReceiver {
 			orderBook.withdrawFailedPayment(orderBook.getMarketDetails(marketId).bankAddress, msg.sender);
 		} else if (attack == Attack.CREATE_MARKET) {
 			orderBook.createMarket(address(1), address(2), 0, 0, 0, 1, address(0x0));
+		} else if (attack == Attack.BURN_GAS) {
+			while (true) {}
 		}
 		return ITransferReceiver.onTransferReceived.selector;
 	}
