@@ -392,8 +392,19 @@ contract MatchingOrderBook {
 	}
 
 	function getOrderBook(bytes32 marketId, Side side, uint depth) external view returns (Order[] memory) {
+		return getOrderBookWithStartId(marketId, side, depth, 0);
+	}
+
+	// get an orderbook starting at a specific order id
+	function getOrderBookWithStartId(bytes32 marketId, Side side, uint depth, uint128 startOrderId) public view returns (Order[] memory) {
 		Order[] memory returnOrders = new Order[](depth); 
-		uint128 orderId = orderbooks[marketId][side];
+		uint128 orderId;
+		if (startOrderId == 0) {
+			orderId = orderbooks[marketId][side];
+		} else {
+			orderId = startOrderId;
+			require(orders[marketId][side][orderId].baseQuantity != 0, "startOrderId does not exist");
+		}
 		for (uint i=0; i < depth; i++) {
 			// If the orderbook depth is less than the requested depth, just cut the loop early to save CPU cycles
 			if (orders[marketId][side][orderId].baseQuantity == 0) return returnOrders;
