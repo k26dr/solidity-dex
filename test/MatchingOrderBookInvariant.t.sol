@@ -9,8 +9,7 @@ import "../libraries/MockERC20.sol";
 // Prices come from a narrow band so orders cross often and the matching engine is exercised.
 // The tests in this file were generated entirely by Claude and have only been reviewed briefly. 
 // It seems useful overall because it does so many invariant checks, but there's a lot of magic
-// code happening here and I haven't reviewed entirely if the framework operates well
-// It does seem to check logic though which is enough for now
+// code happening here and I haven't reviewed entirely how the framework operates 
 
 // Explanation: A handler with 3 traders randomly places and cancels orders on a WETH/USDC market with a 0.1% fee. Prices fall between 1900 and 2100, so orders cross often. Each run makes 3000 calls, and the run fails if any call reverts. You can change the number of calls by changing the invariant runs and depth configs before the MatchingOrderBookInvariantTest contract. Please update the total count above if you do. 
 
