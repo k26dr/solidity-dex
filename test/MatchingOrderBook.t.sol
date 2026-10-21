@@ -2301,6 +2301,11 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, SELL, d).previousOrderId, ids[20]);
 		assertEq(orderBook.getOrder(marketId, SELL, d).nextOrderId, 0);
 
+		// a hint that is too far back
+		vm.expectRevert("hint order is too far back in book");
+		vm.prank(user2);
+		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 15e6, ids[20]);
+
 		// a hint that doesn't exist reverts
 		vm.expectRevert("hint order does not exist");
 		vm.prank(user2);
