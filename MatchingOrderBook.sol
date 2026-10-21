@@ -283,6 +283,11 @@ contract MatchingOrderBook {
 			// otherwise start from the beginning of the orderbook
 			if (hintOrderId != 0) {
 				require(orders[marketId][side][hintOrderId].baseQuantity != 0, "hint order does not exist");
+				if (side == Side.SELL) {
+					require(orders[marketId][side][hintOrderId].price <= price, "hint order is too far back in book");
+				} else {
+					require(orders[marketId][side][hintOrderId].price >= price, "hint order is too far back in book");
+				}
 				nextOrderId = hintOrderId;
 				previousOrderId = orders[marketId][side][nextOrderId].previousOrderId;
 			} else {
