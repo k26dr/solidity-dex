@@ -130,7 +130,7 @@ contract MatchingOrderBook {
 		return placeOrder(marketId, side, baseQuantity, price, 0);
 	}
 
-	// regular placeOrder function
+	// placeOrder function with hint
 	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
 	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
 	// set hintOrderId = 0 if you don't want to include a hint
