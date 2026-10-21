@@ -2357,6 +2357,9 @@ contract MatchingOrderBookTest is Test {
 		// a hint past where the order belongs reverts instead of misplacing it
 		vm.expectRevert("hint order is too far back in book");
 		vm.prank(user3);
+		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 15e6, ids[14]);
+		vm.expectRevert("hint order is too far back in book");
+		vm.prank(user3);
 		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 15e6, ids[5]);
 
 		// a hint that doesn't exist reverts
