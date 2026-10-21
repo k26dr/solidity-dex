@@ -30,6 +30,7 @@ contract MatchingOrderBookHandler is Test {
 	uint public quoteMinted;
 	uint public placeCalls;
 	uint public cancelCalls;
+	uint public badHintReverts; // hinted orders rejected because the hint was past the insertion point
 
 	constructor(MatchingOrderBook _orderBook, MockERC20 _WETH, MockERC20 _USDC, bytes32 _marketId) {
 		orderBook = _orderBook;
@@ -51,7 +52,9 @@ contract MatchingOrderBookHandler is Test {
 		return actors.length;
 	}
 
-	function placeOrder(uint actorSeed, bool isSell, uint qty, uint priceSeed) external {
+	// hintSeed picks no hint, or a random order already on that side as the hint.
+	// A random hint can be at the right spot, too early (walks forward) or past the spot (reverts).
+	function placeOrder(uint actorSeed, bool isSell, uint qty, uint priceSeed, uint hintSeed) external {
 		address actor = actors[actorSeed % actors.length];
 		qty = bound(qty, 1e9, 100e18);
 		uint price = bound(priceSeed, 1900, 2100) * 1e6; // USDC per 1 WETH
@@ -63,26 +66,42 @@ contract MatchingOrderBookHandler is Test {
 			USDC.mint(actor, quote);
 			quoteMinted += quote;
 		}
+		MatchingOrderBook.Side side = isSell ? MatchingOrderBook.Side.SELL : MatchingOrderBook.Side.BUY;
+		uint128 hint = hintSeed % 10 == 0 ? 0 : _orderIdAt(side, hintSeed);
+
+		// minted tokens stay with the actor if this reverts, so the conservation invariant still holds
 		vm.prank(actor);
-		orderBook.placeOrder(marketId, isSell ? MatchingOrderBook.Side.SELL : MatchingOrderBook.Side.BUY, qty, price);
-		placeCalls++;
+		try orderBook.placeOrderWithHint(marketId, side, qty, price, hint) {
+			placeCalls++;
+		} catch Error(string memory reason) {
+			// the only allowed revert is a hint past the insertion point
+			require(hint != 0, reason);
+			require(keccak256(bytes(reason)) == keccak256("hint order is too far back in book"), reason);
+			badHintReverts++;
+		}
+	}
+
+	// Returns the (seed % length)-th order id on one side of the book, or 0 if that side is empty
+	function _orderIdAt(MatchingOrderBook.Side side, uint seed) internal view returns (uint128 id) {
+		uint count;
+		id = orderBook.getFirstOrderId(marketId, side);
+		while (id != 0) {
+			count++;
+			id = orderBook.getOrder(marketId, side, id).nextOrderId;
+		}
+		if (count == 0) return 0;
+		uint index = seed % count;
+		id = orderBook.getFirstOrderId(marketId, side);
+		for (uint i = 0; i < index; i++) {
+			id = orderBook.getOrder(marketId, side, id).nextOrderId;
+		}
 	}
 
 	// Cancels the n-th order on one side of the book, as its owner
 	function cancelOrder(bool isSell, uint indexSeed) external {
 		MatchingOrderBook.Side side = isSell ? MatchingOrderBook.Side.SELL : MatchingOrderBook.Side.BUY;
-		uint count;
-		uint128 id = orderBook.getFirstOrderId(marketId, side);
-		while (id != 0) {
-			count++;
-			id = orderBook.getOrder(marketId, side, id).nextOrderId;
-		}
-		if (count == 0) return;
-		uint index = indexSeed % count;
-		id = orderBook.getFirstOrderId(marketId, side);
-		for (uint i = 0; i < index; i++) {
-			id = orderBook.getOrder(marketId, side, id).nextOrderId;
-		}
+		uint128 id = _orderIdAt(side, indexSeed);
+		if (id == 0) return;
 		vm.prank(orderBook.getOrder(marketId, side, id).user);
 		orderBook.cancelOrder(marketId, side, id);
 		cancelCalls++;
