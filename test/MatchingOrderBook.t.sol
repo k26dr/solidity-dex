@@ -2259,4 +2259,51 @@ contract MatchingOrderBookTest is Test {
 		assertEq(PAY.balanceOf(address(attacker)) + orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
 		assertEq(PAY.balanceOf(bank), orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)));
 	}
+
+	// 20 sells at prices 1..20, then insert with a hint near the back of the book
+	function testPlaceOrderWithHint() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		EURT.mint(user2, 1000e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), type(uint).max);
+
+		uint128[] memory ids = new uint128[](21);
+		for (uint i = 1; i <= 20; i++) {
+			vm.prank(user2);
+			ids[i] = orderBook.placeOrder(marketId, SELL, 10e6, i * 1e6);
+		}
+
+		// 15.5 with a hint at the 15 order goes between 15 and 16
+		vm.prank(user2);
+		uint128 a = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 15.5e6, ids[15]);
+		assertEq(orderBook.getOrder(marketId, SELL, a).previousOrderId, ids[15]);
+		assertEq(orderBook.getOrder(marketId, SELL, a).nextOrderId, ids[16]);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[15]).nextOrderId, a);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[16]).previousOrderId, a);
+
+		// same price as the hint goes behind it, keeping first come first served
+		vm.prank(user2);
+		uint128 b = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 10e6, ids[10]);
+		assertEq(orderBook.getOrder(marketId, SELL, b).previousOrderId, ids[10]);
+		assertEq(orderBook.getOrder(marketId, SELL, b).nextOrderId, ids[11]);
+
+		// a hint earlier in the book walks forward to the right spot
+		vm.prank(user2);
+		uint128 c = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 18.5e6, ids[3]);
+		assertEq(orderBook.getOrder(marketId, SELL, c).previousOrderId, ids[18]);
+		assertEq(orderBook.getOrder(marketId, SELL, c).nextOrderId, ids[19]);
+
+		// the back of the book with a hint at the last order
+		vm.prank(user2);
+		uint128 d = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 25e6, ids[20]);
+		assertEq(orderBook.getOrder(marketId, SELL, d).previousOrderId, ids[20]);
+		assertEq(orderBook.getOrder(marketId, SELL, d).nextOrderId, 0);
+
+		// a hint that doesn't exist reverts
+		vm.expectRevert("hint order does not exist");
+		vm.prank(user2);
+		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 5e6, 999);
+	}
 }
