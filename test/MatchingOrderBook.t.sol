@@ -2367,4 +2367,94 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 5e6, 999);
 	}
+
+	// Seeds 10 sells at 1..10 and 5 buys at 0.1..0.5, then reads slices of the book from different start orders
+	function testGetOrderBookWithStartId() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		EURT.mint(user2, 1000e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), type(uint).max);
+		USDC.mint(user3, 1000e6);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), type(uint).max);
+
+		uint128[] memory sells = new uint128[](11);
+		for (uint i = 1; i <= 10; i++) {
+			vm.prank(user2);
+			sells[i] = orderBook.placeOrder(marketId, SELL, 10e6, i * 1e6);
+		}
+		uint128[] memory buys = new uint128[](6);
+		for (uint i = 1; i <= 5; i++) {
+			vm.prank(user3);
+			buys[i] = orderBook.placeOrder(marketId, BUY, 10e6, i * 0.1e6);
+		}
+
+		// start id 0 reads from the head, same as getOrderBook
+		MatchingOrderBook.Order[] memory page = orderBook.getOrderBookWithStartId(marketId, SELL, 3, 0);
+		MatchingOrderBook.Order[] memory head = orderBook.getOrderBook(marketId, SELL, 3);
+		for (uint i = 0; i < 3; i++) {
+			assertEq(page[i].price, (i + 1) * 1e6);
+			assertEq(page[i].price, head[i].price);
+			assertEq(page[i].nextOrderId, head[i].nextOrderId);
+		}
+
+		// starting mid-book returns that order first and follows the links
+		page = orderBook.getOrderBookWithStartId(marketId, SELL, 3, sells[4]);
+		assertEq(page.length, 3);
+		assertEq(page[0].price, 4e6);
+		assertEq(page[1].price, 5e6);
+		assertEq(page[2].price, 6e6);
+		assertEq(page[0].user, user2);
+		assertEq(page[0].previousOrderId, sells[3]);
+		assertEq(page[2].nextOrderId, sells[7]);
+
+		// depth past the end of the book leaves the rest of the array empty
+		page = orderBook.getOrderBookWithStartId(marketId, SELL, 5, sells[8]);
+		assertEq(page.length, 5);
+		assertEq(page[0].price, 8e6);
+		assertEq(page[2].price, 10e6);
+		assertEq(page[2].nextOrderId, 0);
+		assertEq(page[3].baseQuantity, 0);
+		assertEq(page[4].user, address(0));
+
+		// depth 0 returns an empty array
+		assertEq(orderBook.getOrderBookWithStartId(marketId, SELL, 0, sells[1]).length, 0);
+
+		// buy side reads best bid first, so starting at 0.3 walks down to 0.1
+		page = orderBook.getOrderBookWithStartId(marketId, BUY, 5, buys[3]);
+		assertEq(page[0].price, 0.3e6);
+		assertEq(page[1].price, 0.2e6);
+		assertEq(page[2].price, 0.1e6);
+		assertEq(page[3].baseQuantity, 0);
+
+		// page through the whole sell side 3 orders at a time using the last order's nextOrderId
+		uint128 start = 0;
+		uint seen;
+		do {
+			page = orderBook.getOrderBookWithStartId(marketId, SELL, 3, start);
+			start = 0;
+			for (uint i = 0; i < 3 && page[i].baseQuantity != 0; i++) {
+				seen++;
+				assertEq(page[i].price, seen * 1e6);
+				start = page[i].nextOrderId;
+			}
+		} while (start != 0);
+		assertEq(seen, 10);
+
+		// unknown ids, ids from the other side, and cancelled orders revert
+		vm.expectRevert("startOrderId does not exist");
+		orderBook.getOrderBookWithStartId(marketId, SELL, 3, 999);
+		vm.expectRevert("startOrderId does not exist");
+		orderBook.getOrderBookWithStartId(marketId, SELL, 3, buys[1]);
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, SELL, sells[5]);
+		vm.expectRevert("startOrderId does not exist");
+		orderBook.getOrderBookWithStartId(marketId, SELL, 3, sells[5]);
+		// and the book skips the cancelled order
+		page = orderBook.getOrderBookWithStartId(marketId, SELL, 2, sells[4]);
+		assertEq(page[1].price, 6e6);
+	}
 }
