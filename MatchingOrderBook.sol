@@ -127,6 +127,14 @@ contract MatchingOrderBook {
 	}
 
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external returns (uint128 orderId) {
+		return placeOrder(marketId, side, baseQuantity, price, 0);
+	}
+
+	// regular placeOrder function
+	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
+	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
+	// set hintOrderId = 0 if you don't want to include a hint
+	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId) public returns (uint128 orderId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
@@ -268,8 +276,19 @@ contract MatchingOrderBook {
 		// Place leftover orders in book then refund leftover funds
 		// Block scope this to avoid too many local variables
 		{
-			uint128 nextOrderId = orderbooks[marketId][side];
-			uint128 previousOrderId = 0;
+			uint128 nextOrderId;
+			uint128 previousOrderId;
+
+			// if a hintOrderId is specified, try and start the insertion at that order ID
+			// otherwise start from the beginning of the orderbook
+			if (hintOrderId != 0) {
+				require(orders[marketId][side][hintOrderId].baseQuantity != 0, "hint order does not exist");
+				nextOrderId = hintOrderId;
+				previousOrderId = orders[marketId][side][nextOrderId].previousOrderId;
+			} else {
+				nextOrderId = orderbooks[marketId][side];
+				previousOrderId = 0;
+			}
 			if (nextOrderId == 0) { //  if the orderbook is empty
 				orderbooks[marketId][side] = orderId;
 			}
