@@ -1,156 +1,483 @@
+'forge clean' running (wd: /home/kk/solidity-dex)
+'forge config --json' running
+'forge build --build-info MatchingOrderBook.sol' running (wd: /home/kk/solidity-dex)
 INFO:Detectors:
-Detector: reentrancy-eth
-Reentrancy in OrderBook.fillOrder(uint256,address,address,uint256) (OrderBook.sol#130-181):
-	EXPLANATION (k26dr): bankAddress is an internal contract created and owned by OrderBook.sol so no re-entrancy can occur there. Plus gas is restricted to 2300 just in case.
+Detector: reentrancy-balance
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	Balance read before the call:
+	- afterBalance_scope_1 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#159)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	Balance read before the call:
+	- beforeBalance_scope_0 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#157)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- afterBalance_scope_1 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#159)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- beforeBalance_scope_0 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#157)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- afterBalance_scope_1 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#159)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- beforeBalance_scope_0 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#157)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- afterBalance_scope_1 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#159)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- beforeBalance_scope_0 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#157)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	Balance read before the call:
+	- afterBalance_scope_1 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#159)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	Balance read before the call:
+	- beforeBalance_scope_0 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#157)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- afterBalance_scope_1 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#159)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- beforeBalance_scope_0 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#157)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- afterBalance_scope_1 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#159)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- beforeBalance_scope_0 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#157)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- afterBalance_scope_1 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#159)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External call allowing reentrancy:
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Balance read before the call:
+	- beforeBalance_scope_0 = quoteTokenIERC20.balanceOf(marketDetails.bankAddress) (MatchingOrderBook.sol#157)
+	Possible stale balance used after the call in a condition:
+	- require(bool,string)(placeOrderVars.fillOccurred || canPost,order was too small to post. ran as fill or kill and failed to fill.) (MatchingOrderBook.sol#246)
+		- stale variable `REF_128`
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities
+INFO:Detectors:
+Detector: divide-before-multiply
+MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306) performs a multiplication on the result of a division:
+	- fillQuoteQuantity = fillBaseQuantity * fillOrder.price / 10 ** marketDetails.baseTokenDecimals (MatchingOrderBook.sol#188)
+	- takerFee = fillQuoteQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100 (MatchingOrderBook.sol#193)
+MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306) performs a multiplication on the result of a division:
+	- fillQuoteQuantity = fillBaseQuantity * fillOrder.price / 10 ** marketDetails.baseTokenDecimals (MatchingOrderBook.sol#188)
+	- protocolFee = fillQuoteQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100 (MatchingOrderBook.sol#194)
+MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306) performs a multiplication on the result of a division:
+	- placeOrderVars.quoteQuantity = baseQuantity * price / 10 ** marketDetails.baseTokenDecimals (MatchingOrderBook.sol#152)
+	- price = transferredQuoteQuantity * 10 ** marketDetails.baseTokenDecimals / baseQuantity (MatchingOrderBook.sol#164)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#divide-before-multiply
+INFO:Detectors:
+Detector: reentrancy-no-eth
+Reentrancy in MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333):
 	External calls:
-	- (ok,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#152)
+	- _payOrPark(marketDetails.bankAddress,order.user,marketDetails.baseToken,order.baseQuantity) (MatchingOrderBook.sol#326)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,order.user,marketDetails.quoteToken,quoteQuantity) (MatchingOrderBook.sol#329)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
 	State variables written after the call(s):
-	- orders[bankHash][orderId].baseQuantity -= baseQuantity (OrderBook.sol#159)
-	OrderBook.orders (OrderBook.sol#51) can be used in cross function reentrancies:
-	- OrderBook.cancelOrder(address,address,uint256) (OrderBook.sol#113-128)
-	- OrderBook.fillOrder(uint256,address,address,uint256) (OrderBook.sol#130-181)
-	- OrderBook.getorder(address,address,uint256) (OrderBook.sol#187-190)
-	- OrderBook.placeOrder(address,address,OrderBook.Side,uint256,uint256) (OrderBook.sol#66-111)
-	- orders[bankHash][orderId].quoteQuantity -= quoteQuantity (OrderBook.sol#160)
-	OrderBook.orders (OrderBook.sol#51) can be used in cross function reentrancies:
-	- OrderBook.cancelOrder(address,address,uint256) (OrderBook.sol#113-128)
-	- OrderBook.fillOrder(uint256,address,address,uint256) (OrderBook.sol#130-181)
-	- OrderBook.getorder(address,address,uint256) (OrderBook.sol#187-190)
-	- OrderBook.placeOrder(address,address,OrderBook.Side,uint256,uint256) (OrderBook.sol#66-111)
-	- delete orders[bankHash][orderId] (OrderBook.sol#162)
-	OrderBook.orders (OrderBook.sol#51) can be used in cross function reentrancies:
-	- OrderBook.cancelOrder(address,address,uint256) (OrderBook.sol#113-128)
-	- OrderBook.fillOrder(uint256,address,address,uint256) (OrderBook.sol#130-181)
-	- OrderBook.getorder(address,address,uint256) (OrderBook.sol#187-190)
-	- OrderBook.placeOrder(address,address,OrderBook.Side,uint256,uint256) (OrderBook.sol#66-111)
-Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-1
+	- reentrancyGuard = false (MatchingOrderBook.sol#332)
+	MatchingOrderBook.reentrancyGuard (MatchingOrderBook.sol#81) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.createMarket(address,address,uint256,uint256,uint256,uint256,address) (MatchingOrderBook.sol#114-127)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External calls:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	State variables written after the call(s):
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- failedPayments[to][bank][token] += amount (MatchingOrderBook.sol#349)
+	MatchingOrderBook.failedPayments (MatchingOrderBook.sol#76) can be used in cross function reentrancies:
+	- MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352)
+	- MatchingOrderBook.failedPaymentBalance(address,address,address) (MatchingOrderBook.sol#382-384)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- failedPayments[to][bank][token] += amount (MatchingOrderBook.sol#349)
+	MatchingOrderBook.failedPayments (MatchingOrderBook.sol#76) can be used in cross function reentrancies:
+	- MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352)
+	- MatchingOrderBook.failedPaymentBalance(address,address,address) (MatchingOrderBook.sol#382-384)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- failedPayments[to][bank][token] += amount (MatchingOrderBook.sol#349)
+	MatchingOrderBook.failedPayments (MatchingOrderBook.sol#76) can be used in cross function reentrancies:
+	- MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352)
+	- MatchingOrderBook.failedPaymentBalance(address,address,address) (MatchingOrderBook.sol#382-384)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- failedPayments[to][bank][token] += amount (MatchingOrderBook.sol#349)
+	MatchingOrderBook.failedPayments (MatchingOrderBook.sol#76) can be used in cross function reentrancies:
+	- MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352)
+	- MatchingOrderBook.failedPaymentBalance(address,address,address) (MatchingOrderBook.sol#382-384)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- failedPayments[to][bank][token] += amount (MatchingOrderBook.sol#349)
+	MatchingOrderBook.failedPayments (MatchingOrderBook.sol#76) can be used in cross function reentrancies:
+	- MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352)
+	- MatchingOrderBook.failedPaymentBalance(address,address,address) (MatchingOrderBook.sol#382-384)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- failedPayments[to][bank][token] += amount (MatchingOrderBook.sol#349)
+	MatchingOrderBook.failedPayments (MatchingOrderBook.sol#76) can be used in cross function reentrancies:
+	- MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352)
+	- MatchingOrderBook.failedPaymentBalance(address,address,address) (MatchingOrderBook.sol#382-384)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+	- orderbooks[marketId][placeOrderVars.makerSide] = fillOrder.nextOrderId (MatchingOrderBook.sol#213)
+	MatchingOrderBook.orderbooks (MatchingOrderBook.sol#72) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getFirstOrderId(bytes32,MatchingOrderBook.Side) (MatchingOrderBook.sol#366-368)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- orderbooks[marketId][side] = orderId (MatchingOrderBook.sol#274)
+	MatchingOrderBook.orderbooks (MatchingOrderBook.sol#72) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getFirstOrderId(bytes32,MatchingOrderBook.Side) (MatchingOrderBook.sol#366-368)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- orderbooks[marketId][side] = orderId (MatchingOrderBook.sol#287)
+	MatchingOrderBook.orderbooks (MatchingOrderBook.sol#72) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getFirstOrderId(bytes32,MatchingOrderBook.Side) (MatchingOrderBook.sol#366-368)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- delete orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId] (MatchingOrderBook.sol#212)
+	MatchingOrderBook.orders (MatchingOrderBook.sol#73) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#362-364)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- orders[marketId][placeOrderVars.makerSide][fillOrder.nextOrderId].previousOrderId = 0 (MatchingOrderBook.sol#215)
+	MatchingOrderBook.orders (MatchingOrderBook.sol#73) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#362-364)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].baseQuantity -= baseQuantity (MatchingOrderBook.sol#225)
+	MatchingOrderBook.orders (MatchingOrderBook.sol#73) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#362-364)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- orders[marketId][side][nextOrderId].previousOrderId = orderId (MatchingOrderBook.sol#284)
+	MatchingOrderBook.orders (MatchingOrderBook.sol#73) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#362-364)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- orders[marketId][side][previousOrderId].nextOrderId = orderId (MatchingOrderBook.sol#290)
+	MatchingOrderBook.orders (MatchingOrderBook.sol#73) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#362-364)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- orders[marketId][side][orderId] = Order(msg.sender,baseQuantity,price,nextOrderId,previousOrderId) (MatchingOrderBook.sol#293)
+	MatchingOrderBook.orders (MatchingOrderBook.sol#73) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.getOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#362-364)
+	- MatchingOrderBook.getOrderBook(bytes32,MatchingOrderBook.Side,uint256) (MatchingOrderBook.sol#370-380)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External calls:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,remainingQuoteQuantity) (MatchingOrderBook.sol#233)
+	State variables written after the call(s):
+	- reentrancyGuard = false (MatchingOrderBook.sol#236)
+	MatchingOrderBook.reentrancyGuard (MatchingOrderBook.sol#81) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.createMarket(address,address,uint256,uint256,uint256,uint256,address) (MatchingOrderBook.sol#114-127)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External calls:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,baseQuantity) (MatchingOrderBook.sol#251)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,remainingQuoteQuantity_scope_4) (MatchingOrderBook.sol#256)
+	State variables written after the call(s):
+	- reentrancyGuard = false (MatchingOrderBook.sol#259)
+	MatchingOrderBook.reentrancyGuard (MatchingOrderBook.sol#81) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.createMarket(address,address,uint256,uint256,uint256,uint256,address) (MatchingOrderBook.sol#114-127)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External calls:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,remainingQuoteQuantity_scope_5) (MatchingOrderBook.sol#299)
+	State variables written after the call(s):
+	- reentrancyGuard = false (MatchingOrderBook.sol#305)
+	MatchingOrderBook.reentrancyGuard (MatchingOrderBook.sol#81) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.createMarket(address,address,uint256,uint256,uint256,uint256,address) (MatchingOrderBook.sol#114-127)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+Reentrancy in MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343):
+	External calls:
+	- Bank(bankAddress).withdrawTo(msg.sender,token,amountToSend) (MatchingOrderBook.sol#341)
+	State variables written after the call(s):
+	- reentrancyGuard = false (MatchingOrderBook.sol#342)
+	MatchingOrderBook.reentrancyGuard (MatchingOrderBook.sol#81) can be used in cross function reentrancies:
+	- MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333)
+	- MatchingOrderBook.createMarket(address,address,uint256,uint256,uint256,uint256,address) (MatchingOrderBook.sol#114-127)
+	- MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306)
+	- MatchingOrderBook.withdrawFailedPayment(address,address) (MatchingOrderBook.sol#335-343)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-2
 INFO:Detectors:
-Detector: missing-zero-check
-Bank.withdrawTo(address,address,uint256).user (OrderBook.sol#26) lacks a zero-check on :
-		- (ok,None) = address(user).call{gas: 2300,value: amount}() (OrderBook.sol#31)
-Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+Detector: events-maths
+MatchingOrderBook.updateProtocolFee(uint256) (MatchingOrderBook.sol#100-105) should emit an event for: 
+	- protocolFeePercent = percent (MatchingOrderBook.sol#104) 
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-events-arithmetic
+INFO:Detectors:
+Detector: calls-loop
+MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306) has external calls inside a loop: Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352) has external calls inside a loop: Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	Calls stack containing the loop:
+		MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256)
+MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306) has external calls inside a loop: Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,remainingQuoteQuantity) (MatchingOrderBook.sol#233)
+MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306) has external calls inside a loop: Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
 INFO:Detectors:
 Detector: reentrancy-benign
-Reentrancy in OrderBook.placeOrder(address,address,OrderBook.Side,uint256,uint256) (OrderBook.sol#66-111):
+Reentrancy in MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352):
 	External calls:
-	- (ok,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#76)
-	- (ok_scope_0,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#93)
+	- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
 	State variables written after the call(s):
-	- orderId = ++ orderCounter (OrderBook.sol#107)
-	- orders[bankHash][orderId] = Order(msg.sender,baseQuantity,quoteQuantity,side) (OrderBook.sol#109)
+	- failedPayments[to][bank][token] += amount (MatchingOrderBook.sol#349)
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External calls:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	State variables written after the call(s):
+	- orderId = ++ orderCounter (MatchingOrderBook.sol#266)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
 INFO:Detectors:
 Detector: reentrancy-events
-Reentrancy in OrderBook.cancelOrder(address,address,uint256) (OrderBook.sol#113-128):
+Reentrancy in MatchingOrderBook._payOrPark(address,address,address,uint256) (MatchingOrderBook.sol#345-352):
 	External calls:
-	- Bank(bankAddress).withdrawTo(order.user,baseToken,order.baseQuantity) (OrderBook.sol#123)
-	- Bank(bankAddress).withdrawTo(order.user,quoteToken,order.quoteQuantity) (OrderBook.sol#125)
+	- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
 	Event emitted after the call(s):
-	- OrderCanceled(orderId) (OrderBook.sol#127)
-Reentrancy in OrderBook.fillOrder(uint256,address,address,uint256) (OrderBook.sol#130-181):
+	- PaymentFailed(to,bank,token,amount) (MatchingOrderBook.sol#350)
+Reentrancy in MatchingOrderBook.cancelOrder(bytes32,MatchingOrderBook.Side,uint128) (MatchingOrderBook.sol#308-333):
 	External calls:
-	- (ok,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#152)
-	- Bank(bankAddress).withdrawTo(order.user,address(0),quoteQuantity) (OrderBook.sol#167)
-	- Bank(bankAddress).withdrawTo(msg.sender,baseToken,baseQuantity) (OrderBook.sol#171)
-	- Bank(bankAddress).withdrawTo(order.user,address(0),baseQuantity) (OrderBook.sol#174)
-	- Bank(bankAddress).withdrawTo(msg.sender,quoteToken,quoteQuantity) (OrderBook.sol#178)
-	External calls sending eth:
-	- (ok,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#152)
+	- _payOrPark(marketDetails.bankAddress,order.user,marketDetails.baseToken,order.baseQuantity) (MatchingOrderBook.sol#326)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,order.user,marketDetails.quoteToken,quoteQuantity) (MatchingOrderBook.sol#329)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
 	Event emitted after the call(s):
-	- OrderFill(orderId,baseQuantity) (OrderBook.sol#180)
-Reentrancy in OrderBook.placeOrder(address,address,OrderBook.Side,uint256,uint256) (OrderBook.sol#66-111):
+	- OrderCanceled(orderId) (MatchingOrderBook.sol#331)
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
 	External calls:
-	- (ok,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#76)
-	- (ok_scope_0,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#93)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
 	Event emitted after the call(s):
-	- OrderPlaced(orderId,msg.sender,baseToken,quoteToken,bankHash,side,baseQuantity,quoteQuantity) (OrderBook.sol#110)
+	- OrderFill(placeOrderVars.fillOrderId,fillOrder.user,msg.sender,marketId,fillBaseQuantity,fillOrder.price) (MatchingOrderBook.sol#190)
+	- PaymentFailed(to,bank,token,amount) (MatchingOrderBook.sol#350)
+		- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+	- PaymentFailed(to,bank,token,amount) (MatchingOrderBook.sol#350)
+		- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+	- PaymentFailed(to,bank,token,amount) (MatchingOrderBook.sol#350)
+		- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+	- PaymentFailed(to,bank,token,amount) (MatchingOrderBook.sol#350)
+		- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+	- PaymentFailed(to,bank,token,amount) (MatchingOrderBook.sol#350)
+		- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+	- PaymentFailed(to,bank,token,amount) (MatchingOrderBook.sol#350)
+		- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+Reentrancy in MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306):
+	External calls:
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,quoteQuantityMinusFees) (MatchingOrderBook.sol#197)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.baseToken,fillBaseQuantity) (MatchingOrderBook.sol#199)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.quoteToken,takerFee) (MatchingOrderBook.sol#200)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.quoteToken,protocolFee) (MatchingOrderBook.sol#201)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.baseToken,fillBaseQuantity - takerFee_scope_2 - protocolFee_scope_3) (MatchingOrderBook.sol#205)
+	- _payOrPark(marketDetails.bankAddress,fillOrder.user,marketDetails.quoteToken,fillQuoteQuantity) (MatchingOrderBook.sol#206)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,marketDetails.feeReceiver,marketDetails.baseToken,takerFee_scope_2) (MatchingOrderBook.sol#207)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- _payOrPark(marketDetails.bankAddress,protocolFeeReceiver,marketDetails.baseToken,protocolFee_scope_3) (MatchingOrderBook.sol#208)
+		- Bank(bank).withdrawTo(to,token,amount) (MatchingOrderBook.sol#347-351)
+	- Bank(marketDetails.bankAddress).withdrawTo(msg.sender,marketDetails.quoteToken,remainingQuoteQuantity_scope_5) (MatchingOrderBook.sol#299)
+	Event emitted after the call(s):
+	- OrderPlaced(orderId,msg.sender,marketId,side,baseQuantity,price) (MatchingOrderBook.sol#304)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
 INFO:Detectors:
-Detector: return-bomb
-Bank.withdrawTo(address,address,uint256) (OrderBook.sol#26-36) tries to limit the gas of an external call that controls implicit decoding
-	(ok,None) = address(user).call{gas: 2300,value: amount}() (OrderBook.sol#31)
-Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#return-bomb
+Detector: costly-loop
+MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306) has costly operations inside a loop:
+	- reentrancyGuard = false (MatchingOrderBook.sol#236)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#costly-operations-inside-a-loop
 INFO:Detectors:
-Detector: assembly
-SafeERC20.tryGetDecimals(IERC20) (libraries/SafeERC20.sol#169-177) uses assembly
-	- INLINE ASM (libraries/SafeERC20.sol#171-176)
-SafeERC20._safeTransfer(IERC20,address,uint256,bool) (libraries/SafeERC20.sol#188-212) uses assembly
-	- INLINE ASM (libraries/SafeERC20.sol#191-211)
-SafeERC20._safeTransferFrom(IERC20,address,address,uint256,bool) (libraries/SafeERC20.sol#224-256) uses assembly
-	- INLINE ASM (libraries/SafeERC20.sol#233-255)
-SafeERC20._safeApprove(IERC20,address,uint256,bool) (libraries/SafeERC20.sol#267-291) uses assembly
-	- INLINE ASM (libraries/SafeERC20.sol#270-290)
-Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+Detector: cyclomatic-complexity
+MatchingOrderBook.placeOrder(bytes32,MatchingOrderBook.Side,uint256,uint256) (MatchingOrderBook.sol#129-306) has a high cyclomatic complexity (27).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
 INFO:Detectors:
-Detector: pragma
-3 different versions of Solidity are used:
-	- Version constraint ^0.8.20 is used by:
-		-^0.8.20 (OrderBook.sol#9)
-		-^0.8.20 (libraries/SafeERC20.sol#4)
-	- Version constraint >=0.6.2 is used by:
-		->=0.6.2 (libraries/IERC1363.sol#4)
-		->=0.6.2 (libraries/IERC20Metadata.sol#4)
-	- Version constraint >=0.4.16 is used by:
-		->=0.4.16 (libraries/IERC165.sol#4)
-		->=0.4.16 (libraries/IERC20.sol#4)
-Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#different-pragma-directives-are-used
-INFO:Detectors:
-Detector: solc-version
-Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
-	- VerbatimInvalidDeduplication
-	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
-	- MissingSideEffectsOnSelectorAccess.
-It is used by:
-	- ^0.8.20 (OrderBook.sol#9)
-	- ^0.8.20 (libraries/SafeERC20.sol#4)
-Version constraint >=0.6.2 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
-	- MissingSideEffectsOnSelectorAccess
-	- AbiReencodingHeadOverflowWithStaticArrayCleanup
-	- DirtyBytesArrayToStorage
-	- NestedCalldataArrayAbiReencodingSizeValidation
-	- ABIDecodeTwoDimensionalArrayMemory
-	- KeccakCaching
-	- EmptyByteArrayCopy
-	- DynamicArrayCleanup
-	- MissingEscapingInFormatting
-	- ArraySliceDynamicallyEncodedBaseType
-	- ImplicitConstructorCallvalueCheck
-	- TupleAssignmentMultiStackSlotComponents
-	- MemoryArrayCreationOverflow.
-It is used by:
-	- >=0.6.2 (libraries/IERC1363.sol#4)
-	- >=0.6.2 (libraries/IERC20Metadata.sol#4)
-Version constraint >=0.4.16 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
-	- DirtyBytesArrayToStorage
-	- ABIDecodeTwoDimensionalArrayMemory
-	- KeccakCaching
-	- EmptyByteArrayCopy
-	- DynamicArrayCleanup
-	- ImplicitConstructorCallvalueCheck
-	- TupleAssignmentMultiStackSlotComponents
-	- MemoryArrayCreationOverflow
-	- privateCanBeOverridden
-	- SignedArrayStorageCopy
-	- ABIEncoderV2StorageArrayWithMultiSlotElement
-	- DynamicConstructorArgumentsClippedABIV2
-	- UninitializedFunctionPointerInConstructor_0.4.x
-	- IncorrectEventSignatureInLibraries_0.4.x
-	- ExpExponentCleanup
-	- NestedArrayFunctionCallDecoder
-	- ZeroFunctionSelector.
-It is used by:
-	- >=0.4.16 (libraries/IERC165.sol#4)
-	- >=0.4.16 (libraries/IERC20.sol#4)
-Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
-INFO:Detectors:
-Detector: low-level-calls
-Low level call in Bank.withdrawTo(address,address,uint256) (OrderBook.sol#26-36):
-	- (ok,None) = address(user).call{gas: 2300,value: amount}() (OrderBook.sol#31)
-Low level call in OrderBook.placeOrder(address,address,OrderBook.Side,uint256,uint256) (OrderBook.sol#66-111):
-	- (ok,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#76)
-	- (ok_scope_0,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#93)
-Low level call in OrderBook.fillOrder(uint256,address,address,uint256) (OrderBook.sol#130-181):
-	- (ok,None) = address(bankAddress).call{gas: 2300,value: msg.value}() (OrderBook.sol#152)
-Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
-INFO:Slither:OrderBook.sol analyzed (7 contracts with 101 detectors), 18 result(s) found
-
+Detector: naming-convention
+Variable MatchingOrderBook.MARKET_DETAILS (MatchingOrderBook.sol#71) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+INFO:Slither:MatchingOrderBook.sol analyzed (5 contracts with 101 detectors), 39 result(s) found
