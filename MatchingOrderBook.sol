@@ -58,7 +58,6 @@ contract MatchingOrderBook {
 		uint feeNumerator;
 		uint feeDenominator;
 		uint baseTokenDecimals;
-		address payable feeReceiver;
 		address payable bankAddress;
 	}
 	struct PlaceOrderVars {
@@ -83,7 +82,7 @@ contract MatchingOrderBook {
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
-	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address feeReceiver, address bankAddress);
+	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
 
 	constructor(address payable _protocolFeeReceiver, uint _protocolFeePercent) {
@@ -111,30 +110,31 @@ contract MatchingOrderBook {
 		protocolFeeReceiver = payable(address(0));
 	}
 
-	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) external {
+	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) external {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		require(feeNumerator < feeDenominator, "fee numerator must be less than the denominator");
 		require(baseToken != quoteToken, "base and quote token must be different");
-		bytes32 marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver);
+		bytes32 marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator);
 		require(MARKET_DETAILS[marketId].bankAddress == address(0), "market has already been created");
 		address payable bankAddress = payable(address(new Bank(address(this))));
 		(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(baseToken).tryGetDecimals();
 		require(decimalCallSuccess, "failed to get decimals for token");
-		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, payable(feeReceiver), bankAddress);
-		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, feeReceiver, bankAddress);
+		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, bankAddress);
+		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, bankAddress);
 		reentrancyGuard = false;
 	}
 
-	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, 0);
+	// referrer gets half of any taker fee for the market
+	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external returns (uint128 orderId) {
+		return placeOrderWithHint(marketId, side, baseQuantity, price, referrer, 0);
 	}
 
 	// placeOrder function with hint
 	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
 	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
 	// set hintOrderId = 0 if you don't want to include a hint
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId) public returns (uint128 orderId) {
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer, uint128 hintOrderId) public returns (uint128 orderId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
@@ -205,14 +205,14 @@ contract MatchingOrderBook {
 						Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
 					}
 					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
-					_payOrPark(marketDetails.bankAddress, marketDetails.feeReceiver, marketDetails.quoteToken, takerFee);
+					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.quoteToken, takerFee);
 					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
 				} else {
 					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
 					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
 					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
-					_payOrPark(marketDetails.bankAddress, marketDetails.feeReceiver, marketDetails.baseToken, takerFee);
+					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.baseToken, takerFee);
 					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.baseToken, protocolFee);
 				}
 
@@ -375,8 +375,8 @@ contract MatchingOrderBook {
 		}
 	}
 
-	function getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, address feeReceiver) public pure returns (bytes32) {
-		return keccak256(abi.encodePacked(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, feeReceiver));
+	function getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) public pure returns (bytes32) {
+		return keccak256(abi.encodePacked(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator));
 	}
 
 	function getMarketDetails(bytes32 marketId) public view returns (MarketDetails memory) {
