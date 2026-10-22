@@ -56,9 +56,10 @@ contract MatchingOrderBookHandler is Test {
 
 	// hintSeed picks no hint, or a random order already on that side as the hint.
 	// A random hint can be at the right spot, too early (walks forward) or past the spot (reverts).
-	function placeOrder(uint actorSeed, bool isSell, uint qty, uint priceSeed, uint hintSeed) external {
+	// referrerSeed picks a random actor as the referrer, independent of who places the order (sometimes themselves).
+	function placeOrder(uint actorSeed, bool isSell, uint qty, uint priceSeed, uint hintSeed, uint referrerSeed) external {
 		address actor = actors[actorSeed % actors.length];
-		address referrer = actors[actorSeed % actors.length];
+		address referrer = actors[referrerSeed % actors.length];
 		qty = bound(qty, 1e9, 100e18);
 		uint price = bound(priceSeed, 1900, 2100) * 1e6; // USDC per 1 WETH
 		if (isSell) {
