@@ -107,7 +107,7 @@ contract ReentrantReceiver is ITransferReceiver {
 	}
 
 	function placeOrder(MatchingOrderBook.Side side, uint baseQuantity, uint price) external returns (uint128) {
-		return orderBook.placeOrder(marketId, side, baseQuantity, price);
+		return orderBook.placeOrder(marketId, side, baseQuantity, price, address(0));
 	}
 
 	function cancelOrder(MatchingOrderBook.Side side, uint128 orderId) external {
@@ -120,7 +120,7 @@ contract ReentrantReceiver is ITransferReceiver {
 
 	function onTransferReceived(address, address, uint256, bytes calldata) external returns (bytes4) {
 		if (attack == Attack.PLACE_ORDER) {
-			orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1e6, 1e6);
+			orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1e6, 1e6, address(0));
 		} else if (attack == Attack.CANCEL_ORDER) {
 			orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, 1);
 		} else if (attack == Attack.WITHDRAW_FAILED_PAYMENT) {

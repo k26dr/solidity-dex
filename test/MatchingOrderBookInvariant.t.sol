@@ -58,6 +58,7 @@ contract MatchingOrderBookHandler is Test {
 	// A random hint can be at the right spot, too early (walks forward) or past the spot (reverts).
 	function placeOrder(uint actorSeed, bool isSell, uint qty, uint priceSeed, uint hintSeed) external {
 		address actor = actors[actorSeed % actors.length];
+		address referrer = actors[actorSeed % actors.length];
 		qty = bound(qty, 1e9, 100e18);
 		uint price = bound(priceSeed, 1900, 2100) * 1e6; // USDC per 1 WETH
 		if (isSell) {
@@ -73,7 +74,7 @@ contract MatchingOrderBookHandler is Test {
 
 		// minted tokens stay with the actor if this reverts, so the conservation invariant still holds
 		vm.prank(actor);
-		try orderBook.placeOrderWithHint(marketId, side, qty, price, hint) {
+		try orderBook.placeOrderWithHint(marketId, side, qty, price, referrer, hint) {
 			placeCalls++;
 		} catch Error(string memory reason) {
 			// the only allowed revert is a hint past the insertion point
@@ -127,8 +128,8 @@ contract MatchingOrderBookInvariantTest is Test {
 		WETH = new MockERC20("WETH", "WETH", 18);
 		USDC = new MockERC20("USDC", "USDC", 6);
 		orderBook = new MatchingOrderBook(payable(protocolFeeReceiver), 50);
-		orderBook.createMarket(address(WETH), address(USDC), 0, 0, 1, 1000, feeReceiver);
-		marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 0, 1, 1000, feeReceiver);
+		orderBook.createMarket(address(WETH), address(USDC), 0, 0, 1, 1000);
+		marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 0, 1, 1000);
 		bank = orderBook.getMarketDetails(marketId).bankAddress;
 		handler = new MatchingOrderBookHandler(orderBook, WETH, USDC, marketId);
 
