@@ -2560,4 +2560,41 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(USDC)), 0.5e6);
 		assertEq(USDC.balanceOf(bank), 0.5e6);
 	}
+
+	// With the protocol fee at 20% of the market fee, the referrer gets the other 80%
+	function testReferrerSplitWithCustomProtocolFee() public {
+		vm.prank(protocolFeeReceiver);
+		orderBook.updateProtocolFee(20);
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1, 100);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 1, 100);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		EURT.mint(user2, 200e6);
+		USDC.mint(user3, 200e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+
+		// taker buys 100 EURT: 1% fee = 1 EURT, 0.8 to referrer, 0.2 to protocol
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
+		assertEq(EURT.balanceOf(user3), 99e6);
+		assertEq(EURT.balanceOf(referrer), 0.8e6);
+		assertEq(EURT.balanceOf(protocolFeeReceiver), 0.2e6);
+
+		// taker sells 100 EURT: 1% fee = 1 USDC, 0.8 to referrer, 0.2 to protocol
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
+		assertEq(USDC.balanceOf(user2), 199e6);
+		assertEq(USDC.balanceOf(referrer), 0.8e6);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 0.2e6);
+
+		// everything was paid out, nothing left in the bank
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
 }
