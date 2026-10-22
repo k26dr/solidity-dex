@@ -20,7 +20,7 @@ contract MatchingOrderBookTest is Test {
 	address user2 = address(0x3);
 	address user3 = address(0x4);
 	address burnAddress = address(0x6);
-	address feeReceiver = address(0x7);
+	address referrer = address(0x7);
 	address protocolFeeReceiver = address(0x8);
 
 	function setUp() public {
@@ -39,7 +39,7 @@ contract MatchingOrderBookTest is Test {
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.expectRevert("createMarket before placing an order on it"); 
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115 * 1e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115 * 1e6, 1e6, referrer);
 	}
 
 	function testCreateMarket() public {
@@ -73,7 +73,7 @@ contract MatchingOrderBookTest is Test {
 		EURT.mint(user1, 1000*1e18);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, 1e6, referrer);
 	        MatchingOrderBook.Order memory order = orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId);
 		assertEq(order.user, user1, "User should match");
 		assertEq(order.baseQuantity, 115e6, "Base Quantity should match");
@@ -96,7 +96,7 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user1, 1000*1e18);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, 1e6, referrer);
 	        MatchingOrderBook.Order memory order = orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId);
 		assertEq(order.user, user1, "User should match");
 		assertEq(order.baseQuantity, 115e6, "Base Quantity should match");
@@ -119,9 +119,9 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user1, 1000*1e18);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, 11e5, referrer);
 	}
 
 	function testPlace500SellOrders() public {
@@ -132,7 +132,7 @@ contract MatchingOrderBookTest is Test {
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		for (uint i=1; i < 500; i++) {
 			vm.prank(user1);
-			orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, i * 1e6);
+			orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, i * 1e6, referrer);
 		}
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.SELL, 35);
 		assertEq(orders[0].previousOrderId, 0, "there should be no previousOrderId");
@@ -149,7 +149,7 @@ contract MatchingOrderBookTest is Test {
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		for (uint i=1; i < 101; i++) {
 			vm.prank(user1);
-			orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, i * 1e6);
+			orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 115e6, i * 1e6, referrer);
 		}
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.SELL, 99);
 		assertEq(orders[0].previousOrderId, 0, "there should be no previousOrderId");
@@ -168,7 +168,7 @@ contract MatchingOrderBookTest is Test {
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		for (uint i=1; i < 101; i++) {
 			vm.prank(user1);
-			orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, i * 1e6);
+			orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 115e6, i * 1e6, referrer);
 		}
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.BUY, 100);
 		assertEq(orders[0].previousOrderId, 0, "previousOrderId pointer is wrong");
@@ -211,9 +211,9 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user2, 1000e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
@@ -258,13 +258,13 @@ contract MatchingOrderBookTest is Test {
 		EURT.mint(user2, 2500e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 11e5, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 12e5, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 2500e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 2500e6, 1e6, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
@@ -322,11 +322,11 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user2, 4200e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 11e5, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 12e5, referrer);
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.SELL, 4);
 		assertEq(orders[0].baseQuantity, 1000e6);
 		assertEq(orders[0].price, 1e6);
@@ -342,7 +342,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orders[2].nextOrderId, 0);
 		assertEq(orders[3].baseQuantity, 0, "order 4 should be empty");
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 3500e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 3500e6, 12e5, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
@@ -400,13 +400,13 @@ contract MatchingOrderBookTest is Test {
 		EURT.mint(user1, 3000e6);
 		USDC.mint(user2, 3000e6);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 11e5, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 12e5, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 12e5, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
@@ -452,21 +452,21 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user2, 3000e10);
 		USDC.mint(user3, 3000e10);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 11e5, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 12e5, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 12e5, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 12e5, referrer);
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 11e5, referrer);
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2500e6, 11e5, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 2500e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 2500e6, 12e5, referrer);
 	}
 
 
@@ -477,7 +477,7 @@ contract MatchingOrderBookTest is Test {
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 1000e6);
 		vm.prank(user1);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 	        MatchingOrderBook.Order memory order = orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId);
 		vm.prank(user1);
 		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, orderId);
@@ -496,7 +496,7 @@ contract MatchingOrderBookTest is Test {
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 1000e6);
 		vm.prank(user1);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 	        MatchingOrderBook.Order memory order = orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId);
 		vm.prank(user1);
 		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, orderId);
@@ -513,7 +513,7 @@ contract MatchingOrderBookTest is Test {
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 1000e6);
 		vm.prank(user1);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user2);
 		vm.expectRevert("users can only cancel their own order / order may not exist");
 		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, orderId);
@@ -553,11 +553,11 @@ contract MatchingOrderBookTest is Test {
 		USDC.approve(address(orderBook), 300e18);
 		USDC.mint(user2, 2400e6);
 		vm.prank(user1);
-		uint128 order1Id = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		uint128 order1Id = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user1);
-		uint128 orderIdToCancel = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 11e5);
+		uint128 orderIdToCancel = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 11e5, referrer);
 		vm.prank(user1);
-		uint128 order3Id = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 12e5);
+		uint128 order3Id = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 12e5, referrer);
 		vm.prank(user1);
 		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, orderIdToCancel);
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.SELL, 2);
@@ -565,7 +565,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orders[1].previousOrderId, order1Id);
 		assertEq(orders[0].nextOrderId, order3Id);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2000e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2000e6, 12e5, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
@@ -598,7 +598,7 @@ contract MatchingOrderBookTest is Test {
 		USDC.approve(address(orderBook), 300e18);
 		USDC.mint(user2, 1000e6);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.SELL, 2);
 		assertEq(orders[0].user, user1);
 		assertEq(orders[0].baseQuantity, 1000e6);
@@ -606,7 +606,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orders[0].nextOrderId, 0);
 		assertEq(orders[1].baseQuantity, 0);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 500e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 500e6, 1e6, referrer);
 	}
 
 	function testFillThenTooSmallToPost() public {
@@ -619,7 +619,7 @@ contract MatchingOrderBookTest is Test {
 		USDC.approve(address(orderBook), 300e18);
 		USDC.mint(user2, 1100e6);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.SELL, 2);
 		assertEq(orders[0].user, user1);
 		assertEq(orders[0].baseQuantity, 1000e6);
@@ -627,7 +627,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orders[0].nextOrderId, 0);
 		assertEq(orders[1].baseQuantity, 0);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1100e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1100e6, 1e6, referrer);
 		uint user2usdc = USDC.balanceOf(user2);
 		assertEq(user2usdc, 100e6, "remainder was not refunded");
 	}
@@ -639,9 +639,9 @@ contract MatchingOrderBookTest is Test {
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 2000e6);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 9e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 9e5, referrer);
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.SELL, 2);
 		assertEq(orders[0].price, 9e5);
 		assertEq(orders[1].price, 1e6);
@@ -654,9 +654,9 @@ contract MatchingOrderBookTest is Test {
 		EURT.approve(address(orderBook), 300e18);
 		EURT.mint(user1, 2000e6);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 11e5, referrer);
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.BUY, 2);
 		assertEq(orders[0].price, 11e5);
 		assertEq(orders[1].price, 1e6);
@@ -696,13 +696,13 @@ contract MatchingOrderBookTest is Test {
 		EURT.mint(user1, 4000e6);
 		USDC.mint(user2, 4000e6);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1500e6, 11e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1500e6, 11e5, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1200e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1200e6, 12e5, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 3000e6, 12e5);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 3000e6, 12e5, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
@@ -756,13 +756,13 @@ contract MatchingOrderBookTest is Test {
 		WETH.mint(user2, 25e17);
 		bytes32 marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 1000e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 1000e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 1100e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 1100e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 1200e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 1200e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 25e17, 1000e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 25e17, 1000e6, referrer);
 
 		// verify post-trade balances
 		user1weth = WETH.balanceOf(user1);
@@ -820,13 +820,13 @@ contract MatchingOrderBookTest is Test {
 		WETH.mint(user2, 48e18);
 		bytes32 marketId = orderBook.getMarketId(address(WBTC), address(WETH), 1e3, 0, 0, 1, address(0x0));
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e8, 15e18);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e8, 15e18, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e8, 16e18);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e8, 16e18, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e8, 17e18);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e8, 17e18, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 25e7, 16e18);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 25e7, 16e18, referrer);
 
 		// verify post-trade balances
 		user1weth = WETH.balanceOf(user1);
@@ -862,9 +862,9 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user2);
 		USDC.approve(address(orderBook), 100e6);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 100e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 100e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 100e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 100e6, referrer);
 		MatchingOrderBook.Order[] memory orders = orderBook.getOrderBook(marketId, MatchingOrderBook.Side.BUY, 1);
 		assertEq(orders[0].user, address(0));
 		assertEq(orders[0].baseQuantity, 0);
@@ -894,7 +894,7 @@ contract MatchingOrderBookTest is Test {
 			uint baseQuantity = vm.randomUint() % 1e20;
 			uint price = vm.randomUint() % 100e6 + 1000e6;
 			vm.prank(user);
-			orderBook.placeOrder(marketId, side, baseQuantity, price);
+			orderBook.placeOrder(marketId, side, baseQuantity, price, referrer);
 		}
 	}
 
@@ -903,9 +903,9 @@ contract MatchingOrderBookTest is Test {
 		bytes32 marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 0, 0, 1, address(0x0));
 		WETH.mint(user1, 1e30);
 		vm.prank(user1);
-		uint128 firstOrderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 1001e6);
+		uint128 firstOrderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 1001e6, referrer);
 		vm.prank(user1);
-		uint128 secondOrderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 1000e6);
+		uint128 secondOrderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 1000e6, referrer);
 		uint128 orderbookHead = orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL);
 		require(orderbookHead == firstOrderId);
 		vm.prank(user1);
@@ -920,8 +920,8 @@ contract MatchingOrderBookTest is Test {
 		uint user1usdc = USDC.balanceOf(user1);
 		uint user2eurt = EURT.balanceOf(user2);
 		uint user2usdc = USDC.balanceOf(user2);
-		uint feeEurt = EURT.balanceOf(feeReceiver);
-		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint feeEurt = EURT.balanceOf(referrer);
+		uint feeUsdc = USDC.balanceOf(referrer);
 		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
@@ -941,11 +941,11 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 		if (feeEurt != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			EURT.transfer(burnAddress, feeEurt);
 		}
 		if (feeUsdc != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			USDC.transfer(burnAddress, feeUsdc);
 		}
 		if (protocolFeeEurt != 0) {
@@ -966,17 +966,17 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user2, 1000e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
 		user1usdc = USDC.balanceOf(user1);
 		user2eurt = EURT.balanceOf(user2);
 		user2usdc = USDC.balanceOf(user2);
-		feeEurt = EURT.balanceOf(feeReceiver);
-		feeUsdc = USDC.balanceOf(feeReceiver);
+		feeEurt = EURT.balanceOf(referrer);
+		feeUsdc = USDC.balanceOf(referrer);
 		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		assertEq(user1eurt, 0);
@@ -995,8 +995,8 @@ contract MatchingOrderBookTest is Test {
 		uint user1usdc = USDC.balanceOf(user1);
 		uint user2eurt = EURT.balanceOf(user2);
 		uint user2usdc = USDC.balanceOf(user2);
-		uint feeEurt = EURT.balanceOf(feeReceiver);
-		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint feeEurt = EURT.balanceOf(referrer);
+		uint feeUsdc = USDC.balanceOf(referrer);
 		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
@@ -1016,11 +1016,11 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 		if (feeEurt != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			EURT.transfer(burnAddress, feeEurt);
 		}
 		if (feeUsdc != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			USDC.transfer(burnAddress, feeUsdc);
 		}
 		if (protocolFeeEurt != 0) {
@@ -1041,17 +1041,17 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user1, 1000e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
 		user1usdc = USDC.balanceOf(user1);
 		user2eurt = EURT.balanceOf(user2);
 		user2usdc = USDC.balanceOf(user2);
-		feeEurt = EURT.balanceOf(feeReceiver);
-		feeUsdc = USDC.balanceOf(feeReceiver);
+		feeEurt = EURT.balanceOf(referrer);
+		feeUsdc = USDC.balanceOf(referrer);
 		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		assertEq(user1eurt, 1000e6);
@@ -1070,8 +1070,8 @@ contract MatchingOrderBookTest is Test {
 		uint user1usdc = USDC.balanceOf(user1);
 		uint user2eurt = EURT.balanceOf(user2);
 		uint user2usdc = USDC.balanceOf(user2);
-		uint feeEurt = EURT.balanceOf(feeReceiver);
-		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint feeEurt = EURT.balanceOf(referrer);
+		uint feeUsdc = USDC.balanceOf(referrer);
 		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
@@ -1091,11 +1091,11 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 		if (feeEurt != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			EURT.transfer(burnAddress, feeEurt);
 		}
 		if (feeUsdc != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			USDC.transfer(burnAddress, feeUsdc);
 		}
 		if (protocolFeeEurt != 0) {
@@ -1116,9 +1116,9 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user1, 2000e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2000e6, 1e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 
 		// verify post-trade balances
 		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
@@ -1126,8 +1126,8 @@ contract MatchingOrderBookTest is Test {
 		user1usdc = USDC.balanceOf(user1);
 		user2eurt = EURT.balanceOf(user2);
 		user2usdc = USDC.balanceOf(user2);
-		feeEurt = EURT.balanceOf(feeReceiver);
-		feeUsdc = USDC.balanceOf(feeReceiver);
+		feeEurt = EURT.balanceOf(referrer);
+		feeUsdc = USDC.balanceOf(referrer);
 		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		uint marketEurt = EURT.balanceOf(marketDetails.bankAddress);
@@ -1150,8 +1150,8 @@ contract MatchingOrderBookTest is Test {
 		uint user1usdc = USDC.balanceOf(user1);
 		uint user2eurt = EURT.balanceOf(user2);
 		uint user2usdc = USDC.balanceOf(user2);
-		uint feeEurt = EURT.balanceOf(feeReceiver);
-		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint feeEurt = EURT.balanceOf(referrer);
+		uint feeUsdc = USDC.balanceOf(referrer);
 		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
@@ -1171,11 +1171,11 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 		if (feeEurt != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			EURT.transfer(burnAddress, feeEurt);
 		}
 		if (feeUsdc != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			USDC.transfer(burnAddress, feeUsdc);
 		}
 		if (protocolFeeEurt != 0) {
@@ -1196,9 +1196,9 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user2, 1000e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 2000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 2000e6, 1e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 
 		// verify post-trade balances
 		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
@@ -1206,8 +1206,8 @@ contract MatchingOrderBookTest is Test {
 		user1usdc = USDC.balanceOf(user1);
 		user2eurt = EURT.balanceOf(user2);
 		user2usdc = USDC.balanceOf(user2);
-		feeEurt = EURT.balanceOf(feeReceiver);
-		feeUsdc = USDC.balanceOf(feeReceiver);
+		feeEurt = EURT.balanceOf(referrer);
+		feeUsdc = USDC.balanceOf(referrer);
 		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		uint marketEurt = EURT.balanceOf(marketDetails.bankAddress);
@@ -1230,8 +1230,8 @@ contract MatchingOrderBookTest is Test {
 		uint user1usdc = USDC.balanceOf(user1);
 		uint user2eurt = EURT.balanceOf(user2);
 		uint user2usdc = USDC.balanceOf(user2);
-		uint feeEurt = EURT.balanceOf(feeReceiver);
-		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint feeEurt = EURT.balanceOf(referrer);
+		uint feeUsdc = USDC.balanceOf(referrer);
 		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
@@ -1251,11 +1251,11 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 		if (feeEurt != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			EURT.transfer(burnAddress, feeEurt);
 		}
 		if (feeUsdc != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			USDC.transfer(burnAddress, feeUsdc);
 		}
 		if (protocolFeeEurt != 0) {
@@ -1276,11 +1276,11 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user2, 2000e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 500e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 500e6, 1e6, referrer);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1500e6, 2e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1500e6, 2e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 2e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 2e6, referrer);
 
 		// verify post-trade balances
 		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
@@ -1288,8 +1288,8 @@ contract MatchingOrderBookTest is Test {
 		user1usdc = USDC.balanceOf(user1);
 		user2eurt = EURT.balanceOf(user2);
 		user2usdc = USDC.balanceOf(user2);
-		feeEurt = EURT.balanceOf(feeReceiver);
-		feeUsdc = USDC.balanceOf(feeReceiver);
+		feeEurt = EURT.balanceOf(referrer);
+		feeUsdc = USDC.balanceOf(referrer);
 		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		uint marketEurt = EURT.balanceOf(marketDetails.bankAddress);
@@ -1316,13 +1316,13 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user2, 2000e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 1, 1000, feeReceiver);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1, 1e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 2e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 2e6, referrer);
 
 		// verify post-trade balances
-		uint feeEurt = EURT.balanceOf(feeReceiver);
-		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint feeEurt = EURT.balanceOf(referrer);
+		uint feeUsdc = USDC.balanceOf(referrer);
 		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		assertEq(feeEurt, 0);
@@ -1347,8 +1347,8 @@ contract MatchingOrderBookTest is Test {
 		uint user1usdc = USDC.balanceOf(user1);
 		uint user2eurt = EURT.balanceOf(user2);
 		uint user2usdc = USDC.balanceOf(user2);
-		uint feeEurt = EURT.balanceOf(feeReceiver);
-		uint feeUsdc = USDC.balanceOf(feeReceiver);
+		uint feeEurt = EURT.balanceOf(referrer);
+		uint feeUsdc = USDC.balanceOf(referrer);
 		uint protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		uint protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		if (user1eurt != 0) {
@@ -1368,11 +1368,11 @@ contract MatchingOrderBookTest is Test {
 			USDC.transfer(burnAddress, user2usdc);
 		}
 		if (feeEurt != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			EURT.transfer(burnAddress, feeEurt);
 		}
 		if (feeUsdc != 0) {
-			vm.prank(feeReceiver);
+			vm.prank(referrer);
 			USDC.transfer(burnAddress, feeUsdc);
 		}
 		if (protocolFeeEurt != 0) {
@@ -1393,17 +1393,17 @@ contract MatchingOrderBookTest is Test {
 		USDC.mint(user2, 1000e6);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 1, 10000, feeReceiver);
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 
 		// verify post-trade balances
 		user1eurt = EURT.balanceOf(user1);
 		user1usdc = USDC.balanceOf(user1);
 		user2eurt = EURT.balanceOf(user2);
 		user2usdc = USDC.balanceOf(user2);
-		feeEurt = EURT.balanceOf(feeReceiver);
-		feeUsdc = USDC.balanceOf(feeReceiver);
+		feeEurt = EURT.balanceOf(referrer);
+		feeUsdc = USDC.balanceOf(referrer);
 		protocolFeeEurt = EURT.balanceOf(protocolFeeReceiver);
 		protocolFeeUsdc = USDC.balanceOf(protocolFeeReceiver);
 		assertEq(user1eurt, 0);
@@ -1443,7 +1443,7 @@ contract MatchingOrderBookTest is Test {
 
 		// sell 100 TAX: bank only receives 99, so the order is recorded as 99
 		vm.prank(user2);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 99e6);
 		assertEq(TAX.balanceOf(user2), 0);
 		assertEq(TAX.balanceOf(bank), 99e6);
@@ -1451,7 +1451,7 @@ contract MatchingOrderBookTest is Test {
 
 		// buy 50: bank sends 50 TAX and the buyer receives 49.5
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 50e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 50e6, 1e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 49e6);
 		assertEq(TAX.balanceOf(bank), 49e6);
 		assertEq(TAX.balanceOf(user3), 49.5e6);
@@ -1460,7 +1460,7 @@ contract MatchingOrderBookTest is Test {
 
 		// buy the remaining 49: buyer receives 48.51 and the order is removed
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 49e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 49e6, 1e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 0);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
 		assertEq(TAX.balanceOf(bank), 0);
@@ -1485,7 +1485,7 @@ contract MatchingOrderBookTest is Test {
 
 		// buy 100 EURT at 1.00: bank only receives 99 TAX, so the price is lowered to 0.99
 		vm.prank(user2);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		MatchingOrderBook.Order memory order = orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId);
 		assertEq(order.baseQuantity, 100e6);
 		assertEq(order.price, 0.99e6);
@@ -1494,7 +1494,7 @@ contract MatchingOrderBookTest is Test {
 
 		// sell 40 EURT into the bid: bank sends 39.6 TAX and the seller receives 39.204
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 40e6, 0.99e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 40e6, 0.99e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId).baseQuantity, 60e6);
 		assertEq(TAX.balanceOf(bank), 59.4e6);
 		assertEq(TAX.balanceOf(user3), 39.204e6);
@@ -1502,7 +1502,7 @@ contract MatchingOrderBookTest is Test {
 
 		// sell the remaining 60 EURT: seller receives another 58.806 TAX and the order is removed
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 60e6, 0.99e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 60e6, 0.99e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId).baseQuantity, 0);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
 		assertEq(TAX.balanceOf(bank), 0);
@@ -1522,7 +1522,7 @@ contract MatchingOrderBookTest is Test {
 		TAX.approve(address(orderBook), 100e18);
 
 		vm.prank(user2);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, orderId).baseQuantity, 99e6);
 
 		// cancel refunds the recorded 99, of which the user receives 98.01
@@ -1551,7 +1551,7 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user2);
 		PAY.approve(address(orderBook), 100e18);
 		vm.prank(user2);
-		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		EURT.mint(address(attacker), 100e6);
 
 		attacker.setAttack(ReentrantReceiver.Attack.PLACE_ORDER);
@@ -1583,7 +1583,7 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user2);
 		PAY.approve(address(orderBook), 100e18);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 
 		// taker is paid, maker order is filled, maker's payment stays in the bank
 		assertEq(EURT.balanceOf(user2), 100e6);
@@ -1643,22 +1643,22 @@ contract MatchingOrderBookTest is Test {
 
 		// taker buys 1000 EURT: 0.1% fee of 1 EURT is taken from the base received
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 		assertEq(EURT.balanceOf(user3), 999e6);
 		assertEq(USDC.balanceOf(user2), 1000e6);
-		assertEq(EURT.balanceOf(feeReceiver), 1e6);
+		assertEq(EURT.balanceOf(referrer), 1e6);
 		assertEq(EURT.balanceOf(protocolFeeReceiver), 0);
 
 		// taker sells 1000 EURT: 0.1% fee of 1 USDC is taken from the quote received
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		assertEq(EURT.balanceOf(user3), 1999e6);
 		assertEq(USDC.balanceOf(user2), 1999e6);
-		assertEq(USDC.balanceOf(feeReceiver), 1e6);
+		assertEq(USDC.balanceOf(referrer), 1e6);
 		assertEq(USDC.balanceOf(protocolFeeReceiver), 0);
 
 		// protocol receives nothing and nothing is left parked in the bank
@@ -1692,11 +1692,11 @@ contract MatchingOrderBookTest is Test {
 		FRZ.approve(address(orderBook), 100e18);
 
 		vm.prank(user2);
-		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
 		FRZ.freeze(user2);
 
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 
 		// trade completes for the taker and the maker's 100 FRZ stays in the bank
 		assertEq(EURT.balanceOf(user3), 100e6);
@@ -1732,7 +1732,7 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user2);
 		FRZ.approve(address(orderBook), 100e18);
 		vm.prank(user2);
-		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		FRZ.freeze(user2);
 
 		vm.prank(user2);
@@ -1760,12 +1760,12 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		EURT.approve(address(orderBook), 100e18);
 		vm.prank(user2);
-		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		FRZ.freeze(user3);
 
 		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6);
 		assertEq(EURT.balanceOf(user3), 100e6);
 		assertEq(FRZ.balanceOf(bank), 100e6);
@@ -1785,9 +1785,9 @@ contract MatchingOrderBookTest is Test {
 
 		// sell 3 units at 0.5 (quote 1), then buy 2 units for 1 quote, leaving a 1 unit dust order
 		vm.prank(user2);
-		uint128 dustId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 3, 0.5e6);
+		uint128 dustId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 3, 0.5e6, referrer);
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2, 0.5e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2, 0.5e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, dustId).baseQuantity, 1);
 		assertEq(EURT.balanceOf(user3), 2);
 		assertEq(USDC.balanceOf(user2), 1);
@@ -1795,16 +1795,16 @@ contract MatchingOrderBookTest is Test {
 		// the dust can't be bought on its own because the quote rounds to 0
 		vm.expectRevert("calculated quote quantity is zero");
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 0.5e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 0.5e6, referrer);
 
 		// a normal sell posts behind the dust
 		vm.prank(user2);
-		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), dustId);
 
 		// a normal buy sweeps the dust for 0 quote and then fills against the next order
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 10e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 10e6, 1e6, referrer);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, dustId).baseQuantity, 0);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), askId);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 100e6 - 10e6 + 1);
@@ -1841,9 +1841,9 @@ contract MatchingOrderBookTest is Test {
 		USDC.approve(address(orderBook), 100e18);
 
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		vm.prank(user2);
-		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 105e6, 1e6);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 105e6, 1e6, referrer);
 
 		assertEq(orderId, 0);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
@@ -1861,7 +1861,7 @@ contract MatchingOrderBookTest is Test {
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1, address(0x0));
 		vm.expectRevert("order was too small to post. ran as fill or kill and failed to fill.");
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 5e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 5e6, 1e6, referrer);
 		assertEq(USDC.balanceOf(user1), 10000e6);
 	}
 
@@ -1870,10 +1870,10 @@ contract MatchingOrderBookTest is Test {
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1, address(0x0));
 		vm.expectRevert("zero quantity/price orders not permitted");
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 0, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 0, 1e6, referrer);
 		vm.expectRevert("zero quantity/price orders not permitted");
 		vm.prank(user1);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e6, 0);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e6, 0, referrer);
 	}
 
 	// Base token is an address with no code, so decimals() returns nothing
@@ -1894,7 +1894,7 @@ contract MatchingOrderBookTest is Test {
 		TAX.approve(address(orderBook), 100e18);
 		vm.expectRevert("calculated quote quantity is zero");
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
 	}
 
 	// Fee-on-transfer quote token that burns 100% of a buy delivers nothing to the bank
@@ -1908,7 +1908,7 @@ contract MatchingOrderBookTest is Test {
 		TAX.approve(address(orderBook), 100e18);
 		vm.expectRevert("transferred quote quantity is zero");
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 	}
 
 	// 99.99% fee leaves 100 units of quote for 1e12 base, so the adjusted price rounds to 0
@@ -1921,7 +1921,7 @@ contract MatchingOrderBookTest is Test {
 		TAX.approve(address(orderBook), 100e18);
 		vm.expectRevert("adjusted price is zero");
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e12, 1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e12, 1, referrer);
 	}
 
 	function testEndProtocolFeeWrongUserReverts() public {
@@ -1954,7 +1954,7 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user2);
 		PAY.approve(address(orderBook), 100e18);
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		EURT.mint(address(attacker), 100e6);
 
 		attacker.setAttack(ReentrantReceiver.Attack.CREATE_MARKET);
@@ -1987,7 +1987,7 @@ contract MatchingOrderBookTest is Test {
 		book.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
 		assertEq(EURT.balanceOf(user3), 999e6);
 		assertEq(USDC.balanceOf(user2), 1000e6);
-		assertEq(EURT.balanceOf(feeReceiver), 1e6);
+		assertEq(EURT.balanceOf(referrer), 1e6);
 
 		// taker sells 1000 EURT: 1 USDC fee
 		vm.prank(user3);
@@ -1996,7 +1996,7 @@ contract MatchingOrderBookTest is Test {
 		book.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
 		assertEq(EURT.balanceOf(user3), 1999e6);
 		assertEq(USDC.balanceOf(user2), 1999e6);
-		assertEq(USDC.balanceOf(feeReceiver), 1e6);
+		assertEq(USDC.balanceOf(referrer), 1e6);
 
 		// nothing is held for address(0) and the bank is empty
 		assertEq(book.failedPaymentBalance(address(0), bank, address(EURT)), 0);
@@ -2090,17 +2090,17 @@ contract MatchingOrderBookTest is Test {
 		f.baseMinted += b;
 		f.quoteMinted += q;
 		vm.prank(user2);
-		orderBook.placeOrder(marketId, makerSells ? MatchingOrderBook.Side.SELL : MatchingOrderBook.Side.BUY, f.makerQty, f.makerPrice);
+		orderBook.placeOrder(marketId, makerSells ? MatchingOrderBook.Side.SELL : MatchingOrderBook.Side.BUY, f.makerQty, f.makerPrice, referrer);
 
 		(b, q) = _fundOrder(user3, BASE, !makerSells, f.takerQty, f.takerPrice, f.decimals);
 		f.baseMinted += b;
 		f.quoteMinted += q;
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, makerSells ? MatchingOrderBook.Side.BUY : MatchingOrderBook.Side.SELL, f.takerQty, f.takerPrice);
+		orderBook.placeOrder(marketId, makerSells ? MatchingOrderBook.Side.BUY : MatchingOrderBook.Side.SELL, f.takerQty, f.takerPrice, referrer);
 
 		// no tokens created or lost
-		assertEq(BASE.balanceOf(user2) + BASE.balanceOf(user3) + BASE.balanceOf(bank) + BASE.balanceOf(feeReceiver) + BASE.balanceOf(protocolFeeReceiver), f.baseMinted);
-		assertEq(USDC.balanceOf(user2) + USDC.balanceOf(user3) + USDC.balanceOf(bank) + USDC.balanceOf(feeReceiver) + USDC.balanceOf(protocolFeeReceiver), f.quoteMinted);
+		assertEq(BASE.balanceOf(user2) + BASE.balanceOf(user3) + BASE.balanceOf(bank) + BASE.balanceOf(referrer) + BASE.balanceOf(protocolFeeReceiver), f.baseMinted);
+		assertEq(USDC.balanceOf(user2) + USDC.balanceOf(user3) + USDC.balanceOf(bank) + USDC.balanceOf(referrer) + USDC.balanceOf(protocolFeeReceiver), f.quoteMinted);
 
 		// maker is paid in full at its own price, fees come out of the taker side
 		uint fill = f.makerQty < f.takerQty ? f.makerQty : f.takerQty;
@@ -2127,7 +2127,7 @@ contract MatchingOrderBookTest is Test {
 
 		(uint baseMinted, uint quoteMinted) = _fundOrder(user2, BASE, isSell, qty, price, decimals);
 		vm.prank(user2);
-		uint128 orderId = orderBook.placeOrder(marketId, side, qty, price);
+		uint128 orderId = orderBook.placeOrder(marketId, side, qty, price, referrer);
 		vm.prank(user2);
 		orderBook.cancelOrder(marketId, side, orderId);
 
@@ -2152,7 +2152,7 @@ contract MatchingOrderBookTest is Test {
 			USDC.approve(address(orderBook), type(uint).max);
 		}
 		vm.prank(user);
-		return orderBook.placeOrder(marketId, side, qty, price);
+		return orderBook.placeOrder(marketId, side, qty, price, referrer);
 	}
 
 	// Sells at the same price fill in the order they were placed, after any better priced sell
@@ -2272,7 +2272,7 @@ contract MatchingOrderBookTest is Test {
 		uint128[] memory ids = new uint128[](21);
 		for (uint i = 1; i <= 20; i++) {
 			vm.prank(user2);
-			ids[i] = orderBook.placeOrder(marketId, SELL, 10e6, i * 1e6);
+			ids[i] = orderBook.placeOrder(marketId, SELL, 10e6, i * 1e6, referrer);
 		}
 
 		// 15.5 with a hint at the 15 order goes between 15 and 16
@@ -2324,7 +2324,7 @@ contract MatchingOrderBookTest is Test {
 		uint128[] memory ids = new uint128[](21);
 		for (uint i = 1; i <= 20; i++) {
 			vm.prank(user3);
-			ids[i] = orderBook.placeOrder(marketId, BUY, 10e6, i * 1e6);
+			ids[i] = orderBook.placeOrder(marketId, BUY, 10e6, i * 1e6, referrer);
 		}
 		assertEq(orderBook.getFirstOrderId(marketId, BUY), ids[20]);
 
@@ -2384,12 +2384,12 @@ contract MatchingOrderBookTest is Test {
 		uint128[] memory sells = new uint128[](11);
 		for (uint i = 1; i <= 10; i++) {
 			vm.prank(user2);
-			sells[i] = orderBook.placeOrder(marketId, SELL, 10e6, i * 1e6);
+			sells[i] = orderBook.placeOrder(marketId, SELL, 10e6, i * 1e6, referrer);
 		}
 		uint128[] memory buys = new uint128[](6);
 		for (uint i = 1; i <= 5; i++) {
 			vm.prank(user3);
-			buys[i] = orderBook.placeOrder(marketId, BUY, 10e6, i * 0.1e6);
+			buys[i] = orderBook.placeOrder(marketId, BUY, 10e6, i * 0.1e6, referrer);
 		}
 
 		// start id 0 reads from the head, same as getOrderBook
