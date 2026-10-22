@@ -2457,4 +2457,48 @@ contract MatchingOrderBookTest is Test {
 		page = orderBook.getOrderBookWithStartId(marketId, SELL, 2, sells[4]);
 		assertEq(page[1].price, 6e6);
 	}
+
+	// A frozen referrer's fee share is held, and they withdraw it once unfrozen. The trade itself is not blocked.
+	function testFrozenReferrerWithdrawsLater() public {
+		FreezableERC20 FRZ = new FreezableERC20("FRZ", "Freezable Token", 6);
+		orderBook.createMarket(address(EURT), address(FRZ), 0, 0, 1, 100);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(FRZ), 0, 0, 1, 100);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		address frozenReferrer = address(0x9);
+		FRZ.mint(user3, 100e6);
+		EURT.mint(user2, 100e6);
+		vm.prank(user3);
+		FRZ.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+
+		// maker bids 100 EURT at 1.00 in FRZ
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
+		FRZ.freeze(frozenReferrer);
+
+		// taker sells into it with the frozen referrer. 1% fee on 100 FRZ: 0.5 to referrer, 0.5 to protocol
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, frozenReferrer);
+		assertEq(FRZ.balanceOf(user2), 99e6);
+		assertEq(EURT.balanceOf(user3), 100e6);
+		assertEq(FRZ.balanceOf(protocolFeeReceiver), 0.5e6);
+		assertEq(FRZ.balanceOf(frozenReferrer), 0);
+		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0.5e6);
+		assertEq(FRZ.balanceOf(bank), 0.5e6);
+
+		// still frozen: withdraw fails and the held balance stays
+		vm.expectRevert("ERC20: recipient is frozen");
+		vm.prank(frozenReferrer);
+		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0.5e6);
+
+		// unfrozen: referrer withdraws the full share
+		FRZ.unfreeze(frozenReferrer);
+		vm.prank(frozenReferrer);
+		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		assertEq(FRZ.balanceOf(frozenReferrer), 0.5e6);
+		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0);
+		assertEq(FRZ.balanceOf(bank), 0);
+	}
 }
