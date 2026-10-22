@@ -2501,4 +2501,63 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0);
 		assertEq(FRZ.balanceOf(bank), 0);
 	}
+
+	// The order book contract can't be named as referrer, through either entry point, and nothing moves
+	function testOrderBookCannotBeReferrer() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1, 100);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 1, 100);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+
+		vm.expectRevert("cannot use orderbook contract as referrer");
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, address(orderBook));
+
+		vm.expectRevert("cannot use orderbook contract as referrer");
+		vm.prank(user1);
+		orderBook.placeOrderWithHint(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, address(orderBook), 0);
+
+		assertEq(USDC.balanceOf(user1), 10000e6);
+		assertEq(USDC.balanceOf(bank), 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+
+		// any other referrer still works
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
+		assertEq(USDC.balanceOf(bank), 100e6);
+	}
+
+	// With no referrer, the taker still pays the full fee, the protocol gets its share,
+	// and the referrer share is held for address(0), where nobody can withdraw it (effectively burned)
+	function testZeroReferrerShareBurned() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1, 100);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 1, 100);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		EURT.mint(user2, 200e6);
+		USDC.mint(user3, 200e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+
+		// taker buys 100 EURT: 1 EURT fee, 0.5 to protocol, 0.5 held for address(0)
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, address(0));
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, address(0));
+		assertEq(EURT.balanceOf(user3), 99e6);
+		assertEq(USDC.balanceOf(user2), 100e6);
+		assertEq(EURT.balanceOf(protocolFeeReceiver), 0.5e6);
+		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(EURT)), 0.5e6);
+		assertEq(EURT.balanceOf(bank), 0.5e6);
+
+		// taker sells 100 EURT: 1 USDC fee, 0.5 to protocol, 0.5 held for address(0)
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, address(0));
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, address(0));
+		assertEq(USDC.balanceOf(user2), 199e6);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 0.5e6);
+		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(USDC)), 0.5e6);
+		assertEq(USDC.balanceOf(bank), 0.5e6);
+	}
 }

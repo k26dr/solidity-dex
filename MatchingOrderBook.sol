@@ -141,6 +141,7 @@ contract MatchingOrderBook {
 		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0);
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
 		require(baseQuantity > 0 && price > 0, "zero quantity/price orders not permitted");
+		require(referrer != address(this), "cannot use orderbook contract as referrer");
 
 		placeOrderVars.quoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
 		require(placeOrderVars.quoteQuantity > 0, "calculated quote quantity is zero");
