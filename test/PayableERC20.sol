@@ -126,7 +126,7 @@ contract ReentrantReceiver is ITransferReceiver {
 		} else if (attack == Attack.WITHDRAW_FAILED_PAYMENT) {
 			orderBook.withdrawFailedPayment(orderBook.getMarketDetails(marketId).bankAddress, msg.sender);
 		} else if (attack == Attack.CREATE_MARKET) {
-			orderBook.createMarket(address(1), address(2), 0, 0, 0, 1, address(0x0));
+			orderBook.createMarket(address(1), address(2), 0, 0, 0, 1);
 		} else if (attack == Attack.BURN_GAS) {
 			while (true) {}
 		}

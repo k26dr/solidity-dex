@@ -1982,18 +1982,18 @@ contract MatchingOrderBookTest is Test {
 
 		// taker buys 1000 EURT: 1 EURT fee
 		vm.prank(user2);
-		book.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		book.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		vm.prank(user3);
-		book.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		book.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 		assertEq(EURT.balanceOf(user3), 999e6);
 		assertEq(USDC.balanceOf(user2), 1000e6);
 		assertEq(EURT.balanceOf(referrer), 1e6);
 
 		// taker sells 1000 EURT: 1 USDC fee
 		vm.prank(user3);
-		book.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6);
+		book.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1000e6, 1e6, referrer);
 		vm.prank(user2);
-		book.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6);
+		book.placeOrder(marketId, MatchingOrderBook.Side.SELL, 1000e6, 1e6, referrer);
 		assertEq(EURT.balanceOf(user3), 1999e6);
 		assertEq(USDC.balanceOf(user2), 1999e6);
 		assertEq(USDC.balanceOf(referrer), 1e6);
@@ -2121,7 +2121,7 @@ contract MatchingOrderBookTest is Test {
 
 		MockERC20 BASE = new MockERC20("BASE", "BASE", uint8(decimals));
 		orderBook.createMarket(address(BASE), address(USDC), 0, 0, 0, 1);
-		bytes32 marketId = orderBook.getMarketId(address(BASE), address(USDC), 0, 0, 0);
+		bytes32 marketId = orderBook.getMarketId(address(BASE), address(USDC), 0, 0, 0, 1);
 		address bank = orderBook.getMarketDetails(marketId).bankAddress;
 		MatchingOrderBook.Side side = isSell ? MatchingOrderBook.Side.SELL : MatchingOrderBook.Side.BUY;
 
@@ -2249,7 +2249,7 @@ contract MatchingOrderBookTest is Test {
 		PAY.approve(address(orderBook), 100e18);
 		vm.prank(user2);
 		uint gasBefore = gasleft();
-		orderBook.placeOrder{gas: 10_000_000}(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		orderBook.placeOrder{gas: 10_000_000}(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		uint gasUsed = gasBefore - gasleft();
 
 		// without the cap the burner would eat almost all 10M gas
