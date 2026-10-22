@@ -121,7 +121,7 @@ contract MatchingOrderBookInvariantTest is Test {
 	MatchingOrderBookHandler handler;
 	bytes32 marketId;
 	address bank;
-	address feeReceiver = address(0x7);
+	address referrer = address(0x7);
 	address protocolFeeReceiver = address(0x8);
 
 	function setUp() public {
@@ -144,7 +144,7 @@ contract MatchingOrderBookInvariantTest is Test {
 		for (uint i = 0; i < handler.actorCount(); i++) {
 			total += token.balanceOf(handler.actors(i));
 		}
-		total += token.balanceOf(bank) + token.balanceOf(feeReceiver) + token.balanceOf(protocolFeeReceiver);
+		total += token.balanceOf(bank) + token.balanceOf(referrer) + token.balanceOf(protocolFeeReceiver);
 	}
 
 	// No tokens are created or lost: everything minted is held by a trader, the bank or a fee receiver
