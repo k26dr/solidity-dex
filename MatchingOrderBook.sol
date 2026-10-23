@@ -66,6 +66,10 @@ contract MatchingOrderBook {
 		uint usedQuoteQuantity;
 		Side makerSide;
 		uint128 fillOrderId;
+		uint remainingMakerBaseQuantity;
+		uint remainingMakerQuoteQuantity;
+		uint makerOrderPrice;
+		address maker;
 	}
 	mapping(bytes32 => MarketDetails) public MARKET_DETAILS; // market_id -> MarketDetails
 	mapping(bytes32 => mapping(Side => uint128)) orderbooks; // marketId -> Side -> firstOrderId
@@ -138,7 +142,7 @@ contract MatchingOrderBook {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
-		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0);
+		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0));
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
 		require(baseQuantity > 0 && price > 0, "zero quantity/price orders not permitted");
 		require(referrer != address(this), "cannot use orderbook contract as referrer");
@@ -232,6 +236,25 @@ contract MatchingOrderBook {
 				}
 				else if (baseQuantity < fillOrder.baseQuantity) {
 					orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].baseQuantity -= baseQuantity;
+					
+					// if the partially filled orders go below the post minimum, refund the maker with the unfilled quantity
+					placeOrderVars.remainingMakerBaseQuantity = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].baseQuantity;
+					placeOrderVars.makerOrderPrice = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].price;
+					placeOrderVars.remainingMakerQuoteQuantity = placeOrderVars.remainingMakerBaseQuantity * placeOrderVars.makerOrderPrice / 
+						10**marketDetails.baseTokenDecimals;
+					if (placeOrderVars.remainingMakerBaseQuantity < marketDetails.baseMinPostSize || 
+					    placeOrderVars.remainingMakerQuoteQuantity < marketDetails.quoteMinPostSize) {
+						placeOrderVars.maker = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].user;
+						delete orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId];
+						if (placeOrderVars.makerSide == Side.SELL) {
+							_payOrPark(marketDetails.bankAddress, placeOrderVars.maker, 
+								   marketDetails.baseToken, placeOrderVars.remainingMakerBaseQuantity);
+						}
+						else {
+							_payOrPark(marketDetails.bankAddress, placeOrderVars.maker, 
+								   marketDetails.quoteToken, placeOrderVars.remainingMakerQuoteQuantity);
+						}
+					}
 				}
 
 				if (baseQuantity <= fillOrder.baseQuantity) {
