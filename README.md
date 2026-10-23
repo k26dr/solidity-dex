@@ -6,7 +6,7 @@ Market creators can set custom fees and fee receivers so anyone can use this as 
 
 It is a full on-chain spot exchange with on-chain matching and risk isolation. 
 
-There is a minimum post order size on markets that is configurable during market creation. Any orders below the minimum size are run as fill or kill operations that error out if the order doesn't fill in it's entirety. A single base-quote token pair can have multiple markets with different order minimum sizes. This keeps the exchange flexible and allows us to get to a level where spam is no longer an issue. 
+There is a minimum post order size on markets that is configurable during market creation. Any orders below the minimum size are run as fill or kill operations that error out if the order doesn't fill in it's entirety. A single base-quote token pair can have multiple markets with different post minimum sizes. This keeps the exchange flexible and allows us to get to a level where spam is no longer an issue. 
 
 Both versions have a risk isolation system to prevent malicious tokens from attacking other markets. Supported token types include standard ERC20 and non-standard fee-for-transfer tokens. ERC1363 are supported with a transfer gas limit of 110k. Anything more than that and you will have to recover the token using `withdrawFailedPayment`. 
 
