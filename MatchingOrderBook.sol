@@ -245,7 +245,15 @@ contract MatchingOrderBook {
 					if (placeOrderVars.remainingMakerBaseQuantity < marketDetails.baseMinPostSize || 
 					    placeOrderVars.remainingMakerQuoteQuantity < marketDetails.quoteMinPostSize) {
 						placeOrderVars.maker = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].user;
+						
+						// delete the order
 						delete orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId];
+						orderbooks[marketId][placeOrderVars.makerSide] = fillOrder.nextOrderId;
+						if (fillOrder.nextOrderId != 0) {
+							orders[marketId][placeOrderVars.makerSide][fillOrder.nextOrderId].previousOrderId = 0;
+						}
+
+						// refund the remaining amount
 						if (placeOrderVars.makerSide == Side.SELL) {
 							_payOrPark(marketDetails.bankAddress, placeOrderVars.maker, 
 								   marketDetails.baseToken, placeOrderVars.remainingMakerBaseQuantity);
