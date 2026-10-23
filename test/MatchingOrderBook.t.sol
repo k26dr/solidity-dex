@@ -2597,4 +2597,98 @@ contract MatchingOrderBookTest is Test {
 		assertEq(EURT.balanceOf(bank), 0);
 		assertEq(USDC.balanceOf(bank), 0);
 	}
+
+	// ---------- Dust maker refunds ----------
+
+	// A partial fill that leaves a maker sell below the market minimum refunds the rest to the maker,
+	// removes the order, and leaves the book working for the orders behind it
+	function testDustMakerSellRefunded() public {
+		orderBook.createMarket(address(EURT), address(USDC), 10e6, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 10e6, 0, 0, 1);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		EURT.mint(user2, 200e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		USDC.mint(user3, 1000e6);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+
+		vm.prank(user2);
+		uint128 dustId = orderBook.placeOrder(marketId, SELL, 100e6, 1e6, referrer);
+		vm.prank(user2);
+		uint128 nextId = orderBook.placeOrder(marketId, SELL, 100e6, 2e6, referrer);
+
+		// buy 95 leaves 5 EURT, below the 10 EURT minimum, so the 5 is refunded
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 95e6, 1e6, referrer);
+		assertEq(EURT.balanceOf(user3), 95e6);
+		assertEq(USDC.balanceOf(user2), 95e6);
+		assertEq(EURT.balanceOf(user2), 5e6);
+		assertEq(orderBook.getOrder(marketId, SELL, dustId).baseQuantity, 0);
+		assertEq(EURT.balanceOf(bank), 100e6);
+
+		// the next order is now the head and is still fillable
+		assertEq(orderBook.getFirstOrderId(marketId, SELL), nextId);
+		assertEq(orderBook.getOrder(marketId, SELL, nextId).previousOrderId, 0);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 50e6, 2e6, referrer);
+		assertEq(EURT.balanceOf(user3), 145e6);
+		assertEq(orderBook.getOrder(marketId, SELL, nextId).baseQuantity, 50e6);
+	}
+
+	// Same on the buy side: a maker bid left below the quote minimum is refunded its remaining quote
+	function testDustMakerBuyRefunded() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		USDC.mint(user3, 1000e6);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+		EURT.mint(user2, 200e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+
+		vm.prank(user3);
+		uint128 dustId = orderBook.placeOrder(marketId, BUY, 100e6, 1e6, referrer);
+		vm.prank(user3);
+		uint128 nextId = orderBook.placeOrder(marketId, BUY, 100e6, 0.5e6, referrer);
+
+		// sell 95 leaves a bid worth 5 USDC, below the 10 USDC minimum, so the 5 USDC is refunded
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 95e6, 1e6, referrer);
+		assertEq(USDC.balanceOf(user2), 95e6);
+		assertEq(EURT.balanceOf(user3), 95e6);
+		assertEq(USDC.balanceOf(user3), 1000e6 - 100e6 - 50e6 + 5e6);
+		assertEq(orderBook.getOrder(marketId, BUY, dustId).baseQuantity, 0);
+		assertEq(USDC.balanceOf(bank), 50e6);
+
+		assertEq(orderBook.getFirstOrderId(marketId, BUY), nextId);
+		assertEq(orderBook.getOrder(marketId, BUY, nextId).previousOrderId, 0);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 50e6, 0.5e6, referrer);
+		assertEq(EURT.balanceOf(user3), 145e6);
+		assertEq(orderBook.getOrder(marketId, BUY, nextId).baseQuantity, 50e6);
+	}
+
+	// A partial fill that leaves the maker at or above the minimum keeps the order on the book
+	function testPartialFillAboveMinimumNotRefunded() public {
+		orderBook.createMarket(address(EURT), address(USDC), 10e6, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 10e6, 0, 0, 1);
+		EURT.mint(user2, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		USDC.mint(user3, 100e6);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+
+		vm.prank(user2);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 90e6, 1e6, referrer);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 10e6);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), askId);
+		assertEq(EURT.balanceOf(user2), 0);
+	}
 }
