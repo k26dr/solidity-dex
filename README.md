@@ -6,7 +6,7 @@ Market creators can set custom taker fees and there is a referral system built i
 
 The taker fee is set during market creation. The fee is split between a referrer specified in each trade and the protocol. Frontends can use this to collect a fee on any trades executed on their platforms. By default, the protocol takes 50% of the fee revenue, but that number can be adjusted down to anywhere between 0%-50%. The referrer receives the rest.
 
-It is a full on-chain spot exchange with on-chain matching and risk isolation. The funds for each market are escrowed in separate holding contracts to prevent cross-contimination of risk.
+It is a full on-chain spot exchange with on-chain matching and risk isolation. The funds for open orders and failed payments for each individual market are held in separate trustless contracts to prevent cross-contamination of risk.
 
 There is a minimum post order size on markets that is configurable during market creation. Any orders below the minimum size are run as fill or kill operations that error out if the order doesn't fill in it's entirety. If a maker order is partially filled and the remaining amount is less than the base or quote minimum, the remainder of the maker order is refunded to the maker.  
 
