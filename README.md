@@ -4,7 +4,7 @@ The primary contract here is [MatchingOrderBook.sol](MatchingOrderBook.sol).
 
 Market creators can set custom taker fees and there is a referral system built in so that anyone can use this to make referral revenue. 
 
-The taker fee is set during market creation. The fee is split between a referrer specified in each trade and the protocol. Frontends can use this to collect a fee on any trades executed on their platforms. By default, the protocol takes 50% of the fee revenue, but that number can be adjusted down to anywhere between 0%-50%.
+The taker fee is set during market creation. The fee is split between a referrer specified in each trade and the protocol. Frontends can use this to collect a fee on any trades executed on their platforms. By default, the protocol takes 50% of the fee revenue, but that number can be adjusted down to anywhere between 0%-50%. The referrer receives the rest.
 
 It is a full on-chain spot exchange with on-chain matching and risk isolation. 
 
