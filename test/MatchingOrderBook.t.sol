@@ -28,6 +28,10 @@ contract MatchingOrderBookTest is Test {
 	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
 	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount);
 	event ProtocolFeeChanged(uint newPercent);
+	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, MatchingOrderBook.Side side, uint baseQuantity, uint price);
+	event OrderCanceled(uint indexed orderId);
+	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
+	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 
 	function setUp() public {
 		USDC = new MockERC20("USDC", "USDC", 6);
@@ -2854,5 +2858,128 @@ contract MatchingOrderBookTest is Test {
 		emit WithdrawFailedPayment(user2, bank, address(FRZ), 100e6);
 		vm.prank(user2);
 		orderBook.withdrawFailedPayment(bank, address(FRZ));
+	}
+
+	// createMarket emits the market settings, the cached base token decimals, and the new bank address
+	function testMarketCreatedEvent() public {
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 10e6, 5e6, 1, 1000);
+		// the bank is the next contract the order book deploys
+		address expectedBank = vm.computeCreateAddress(address(orderBook), vm.getNonce(address(orderBook)));
+
+		vm.expectEmit(true, false, false, true, address(orderBook));
+		emit MarketCreated(marketId, address(EURT), address(USDC), 10e6, 5e6, 1, 1000, 6, expectedBank);
+		orderBook.createMarket(address(EURT), address(USDC), 10e6, 5e6, 1, 1000);
+		assertEq(orderBook.getMarketDetails(marketId).bankAddress, expectedBank);
+	}
+
+	// A resting order emits OrderPlaced with its id, owner, market, side, size and price
+	function testOrderPlacedEvent() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1);
+		EURT.mint(user2, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+
+		uint128 expectedId = orderBook.orderCounter() + 1;
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderPlaced(expectedId, user2, marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		vm.prank(user2);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		assertEq(orderId, expectedId);
+
+		expectedId = orderBook.orderCounter() + 1;
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderPlaced(expectedId, user1, marketId, MatchingOrderBook.Side.BUY, 50e6, 0.9e6);
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 50e6, 0.9e6);
+	}
+
+	// With fee-on-transfer tokens, OrderPlaced reports what was actually posted:
+	// the reduced size for a sell and the adjusted price for a buy
+	function testOrderPlacedEventFeeOnTransfer() public {
+		FeeOnTransferERC20 TAX = new FeeOnTransferERC20("TAX", "Taxed Token", 6, 100);
+		TAX.mint(user2, 100e6);
+		vm.prank(user2);
+		TAX.approve(address(orderBook), 100e18);
+
+		// TAX as base: selling 100 lands 99 in the bank
+		orderBook.createMarket(address(TAX), address(USDC), 0, 0, 0, 1);
+		bytes32 sellMarket = orderBook.getMarketId(address(TAX), address(USDC), 0, 0, 0, 1);
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderPlaced(orderBook.orderCounter() + 1, user2, sellMarket, MatchingOrderBook.Side.SELL, 99e6, 1e6);
+		vm.prank(user2);
+		orderBook.placeOrder(sellMarket, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+
+		// TAX as quote: a 100 EURT bid at 1.00 only lands 0.99 TAX per EURT, so the price is posted as 0.99
+		TAX.mint(user3, 100e6);
+		vm.prank(user3);
+		TAX.approve(address(orderBook), 100e18);
+		orderBook.createMarket(address(EURT), address(TAX), 0, 0, 0, 1);
+		bytes32 buyMarket = orderBook.getMarketId(address(EURT), address(TAX), 0, 0, 0, 1);
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderPlaced(orderBook.orderCounter() + 1, user3, buyMarket, MatchingOrderBook.Side.BUY, 100e6, 0.99e6);
+		vm.prank(user3);
+		orderBook.placeOrder(buyMarket, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+	}
+
+	// A taker that crosses two asks emits one OrderFill per maker, at each maker's price, then OrderPlaced
+	// for the leftover it posts
+	function testOrderFillEventsThenOrderPlaced() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1);
+		EURT.mint(user2, 200e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint128 ask1 = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		vm.prank(user2);
+		uint128 ask2 = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1.1e6);
+
+		// buy 250 at up to 1.20: fills 100 at 1.00 and 100 at 1.10, posts 50 at 1.20
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderFill(ask1, user2, user1, marketId, 100e6, 1e6);
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderFill(ask2, user2, user1, marketId, 100e6, 1.1e6);
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderPlaced(orderBook.orderCounter() + 1, user1, marketId, MatchingOrderBook.Side.BUY, 50e6, 1.2e6);
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 250e6, 1.2e6);
+	}
+
+	// A taker that fills completely emits OrderFill for the partial maker fill and no OrderPlaced
+	function testFullFillEmitsNoOrderPlaced() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1);
+		EURT.mint(user2, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+
+		vm.recordLogs();
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderFill(askId, user2, user1, marketId, 40e6, 1e6);
+		vm.prank(user1);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 40e6, 1e6);
+		assertEq(orderId, 0);
+
+		Vm.Log[] memory logs = vm.getRecordedLogs();
+		for (uint i = 0; i < logs.length; i++) {
+			if (logs[i].emitter == address(orderBook)) {
+				assertTrue(logs[i].topics[0] != OrderPlaced.selector, "full fill should not emit OrderPlaced");
+			}
+		}
+	}
+
+	function testOrderCanceledEvent() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 0, 1);
+		vm.prank(user1);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+
+		vm.expectEmit(true, false, false, true, address(orderBook));
+		emit OrderCanceled(orderId);
+		vm.prank(user1);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, orderId);
 	}
 }
