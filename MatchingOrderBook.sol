@@ -131,19 +131,24 @@ contract MatchingOrderBook {
 
 	// For markets with no fee, or if you would like to see the market fee burned, you can place orders without a referrer
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, address(0), 0);
+		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, address(0));
 	}
 
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, referrer, 0);
+		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, referrer);
 	}
 
 	// placeOrder function with hint
 	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
 	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
 	// set hintOrderId = 0 if you don't want to include a hint
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer, uint128 hintOrderId) public returns (uint128 orderId) {
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId) public returns (uint128 orderId) {
+		return placeOrderWithHint(marketId, side, baseQuantity, price, hintOrderId, address(0));
+	}
+
+	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, address referrer) public returns (uint128 orderId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];

@@ -75,7 +75,7 @@ contract MatchingOrderBookHandler is Test {
 
 		// minted tokens stay with the actor if this reverts, so the conservation invariant still holds
 		vm.prank(actor);
-		try orderBook.placeOrderWithHint(marketId, side, qty, price, referrer, hint) {
+		try orderBook.placeOrderWithHint(marketId, side, qty, price, hint, referrer) {
 			placeCalls++;
 		} catch Error(string memory reason) {
 			// the only allowed revert is a hint past the insertion point
