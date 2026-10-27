@@ -86,8 +86,11 @@ contract MatchingOrderBook {
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
+	event OrderRefunded(uint indexed orderId, address token, uint quantity);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
+	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount);
+	event ProtocolFeeChanged(uint newPercent);
 
 	constructor(address payable _protocolFeeReceiver, uint _protocolFeePercent) {
 		// initial conditions can be protocolFeeReceiver=address(0) and protocolFeePercent=0 if you want
@@ -105,6 +108,7 @@ contract MatchingOrderBook {
 		require(percent <= 50, "Max protocol fee is 50 percent of market fee");
 		require(!protocolFeeLocked, "Protocol fee control is locked");
 		protocolFeePercent = percent;
+		emit ProtocolFeeChanged(percent);
 	}
 
 	function endProtocolFee() public {
@@ -268,10 +272,12 @@ contract MatchingOrderBook {
 						if (placeOrderVars.makerSide == Side.SELL) {
 							_payOrPark(marketDetails.bankAddress, placeOrderVars.maker, 
 								   marketDetails.baseToken, placeOrderVars.remainingMakerBaseQuantity);
+							emit OrderRefunded(placeOrderVars.fillOrderId, marketDetails.baseToken, placeOrderVars.remainingMakerBaseQuantity);
 						}
 						else {
 							_payOrPark(marketDetails.bankAddress, placeOrderVars.maker, 
 								   marketDetails.quoteToken, placeOrderVars.remainingMakerQuoteQuantity);
+							emit OrderRefunded(placeOrderVars.fillOrderId, marketDetails.quoteToken, placeOrderVars.remainingMakerQuoteQuantity);
 						}
 					}
 				}
@@ -405,6 +411,7 @@ contract MatchingOrderBook {
 		uint amountToSend = failedPayments[msg.sender][bankAddress][token];
 		require(amountToSend > 0, "no failed payment balance for user+bank+token combo");
 		failedPayments[msg.sender][bankAddress][token] = 0;
+		emit WithdrawFailedPayment(msg.sender, bankAddress, token, amountToSend);
 		Bank(bankAddress).withdrawTo(msg.sender, token, amountToSend);
 		reentrancyGuard = false;
 	}
