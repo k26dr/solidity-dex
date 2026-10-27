@@ -129,8 +129,8 @@ contract MatchingOrderBookInvariantTest is Test {
 		WETH = new MockERC20("WETH", "WETH", 18);
 		USDC = new MockERC20("USDC", "USDC", 6);
 		orderBook = new MatchingOrderBook(payable(protocolFeeReceiver), 50);
-		orderBook.createMarket(address(WETH), address(USDC), 0, 0, 1, 1000);
-		marketId = orderBook.getMarketId(address(WETH), address(USDC), 0, 0, 1, 1000);
+		orderBook.createMarket(address(WETH), address(USDC), 1, 1, 1, 1000);
+		marketId = orderBook.getMarketId(address(WETH), address(USDC), 1, 1, 1, 1000);
 		bank = orderBook.getMarketDetails(marketId).bankAddress;
 		handler = new MatchingOrderBookHandler(orderBook, WETH, USDC, marketId);
 
