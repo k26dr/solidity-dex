@@ -23,6 +23,12 @@ contract MatchingOrderBookTest is Test {
 	address referrer = address(0x7);
 	address protocolFeeReceiver = address(0x8);
 
+	// copies of the order book events so tests can check them with vm.expectEmit
+	event OrderRefunded(uint indexed orderId, address token, uint quantity);
+	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
+	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount);
+	event ProtocolFeeChanged(uint newPercent);
+
 	function setUp() public {
 		USDC = new MockERC20("USDC", "USDC", 6);
 		EURT = new MockERC20("EURT", "EURT", 6);
@@ -2752,5 +2758,101 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, SELL), leftover);
 		assertEq(orderBook.getOrder(marketId, SELL, leftover).nextOrderId, asks[2]);
 		assertEq(orderBook.getFirstOrderId(marketId, BUY), bids[3]);
+	}
+
+	// ---------- Events ----------
+
+	// A maker sell left below the 10 EURT minimum is removed and OrderRefunded reports the 5 EURT returned
+	function testOrderRefundedEventSell() public {
+		orderBook.createMarket(address(EURT), address(USDC), 10e6, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 10e6, 0, 0, 1);
+		EURT.mint(user2, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+
+		vm.expectEmit(true, false, false, true, address(orderBook));
+		emit OrderRefunded(orderId, address(EURT), 5e6);
+		vm.prank(user1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 95e6, 1e6);
+	}
+
+	// A maker buy left below the 10 USDC minimum is removed and OrderRefunded reports the 5 USDC returned
+	function testOrderRefundedEventBuy() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 10e6, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 10e6, 0, 1);
+		EURT.mint(user2, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user1);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+
+		vm.expectEmit(true, false, false, true, address(orderBook));
+		emit OrderRefunded(orderId, address(USDC), 5e6);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 95e6, 1e6);
+	}
+
+	// When the leftover rounds to 0 quote, nothing is sent but OrderRefunded still fires so indexers see the removal
+	function testOrderRefundedEventZeroAmount() public {
+		orderBook.createMarket(address(EURT), address(USDC), 10e6, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 10e6, 0, 0, 1);
+		EURT.mint(user2, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		// bid 100 EURT at a price of 1 quote unit per EURT (100 units of USDC in total)
+		vm.prank(user1);
+		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1);
+
+		// selling 99.5 leaves 0.5 EURT, worth 0 quote units after rounding
+		vm.expectEmit(true, false, false, true, address(orderBook));
+		emit OrderRefunded(orderId, address(USDC), 0);
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 99.5e6, 1);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, orderId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+	}
+
+	// updateProtocolFee emits the new percent and endProtocolFee emits 0
+	function testProtocolFeeChangedEvents() public {
+		vm.expectEmit(false, false, false, true, address(orderBook));
+		emit ProtocolFeeChanged(20);
+		vm.prank(protocolFeeReceiver);
+		orderBook.updateProtocolFee(20);
+
+		vm.expectEmit(false, false, false, true, address(orderBook));
+		emit ProtocolFeeChanged(0);
+		vm.prank(protocolFeeReceiver);
+		orderBook.endProtocolFee();
+	}
+
+	// A payment to a frozen maker emits PaymentFailed, and withdrawing it later emits WithdrawFailedPayment
+	function testPaymentFailedAndWithdrawEvents() public {
+		FreezableERC20 FRZ = new FreezableERC20("FRZ", "Freezable Token", 6);
+		orderBook.createMarket(address(EURT), address(FRZ), 0, 0, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(FRZ), 0, 0, 0, 1);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		EURT.mint(user2, 100e6);
+		FRZ.mint(user3, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		FRZ.approve(address(orderBook), 100e18);
+
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		FRZ.freeze(user2);
+
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit PaymentFailed(user2, bank, address(FRZ), 100e6);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+
+		FRZ.unfreeze(user2);
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit WithdrawFailedPayment(user2, bank, address(FRZ), 100e6);
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(bank, address(FRZ));
 	}
 }
