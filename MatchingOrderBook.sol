@@ -116,6 +116,7 @@ contract MatchingOrderBook {
 		protocolFeePercent = 0;
 		protocolFeeLocked = true;
 		protocolFeeReceiver = payable(address(0));
+		emit ProtocolFeeChanged(0);
 	}
 
 	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) external {
