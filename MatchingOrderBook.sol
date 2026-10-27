@@ -148,6 +148,7 @@ contract MatchingOrderBook {
 	}
 
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
+	// set hintOrderId = 0 if you don't want to include a hint
 	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, address referrer) public returns (uint128 orderId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
