@@ -129,6 +129,11 @@ contract MatchingOrderBook {
 		reentrancyGuard = false;
 	}
 
+	// For markets with no fee, or if you would like to see the market fee burned, you can place orders without a referrer
+	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external returns (uint128 orderId) {
+		return placeOrderWithHint(marketId, side, baseQuantity, price, address(0), 0);
+	}
+
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external returns (uint128 orderId) {
 		return placeOrderWithHint(marketId, side, baseQuantity, price, referrer, 0);
