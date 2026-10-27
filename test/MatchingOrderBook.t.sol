@@ -2691,4 +2691,66 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), askId);
 		assertEq(EURT.balanceOf(user2), 0);
 	}
+
+	// placeOrderWithHint with a referrer on a 1% fee market (protocol 50%):
+	// a resting order placed deep with a hint earns the referrer nothing, and taker orders through
+	// placeOrderWithHint pay the referrer half the fee whether they fully fill or post a leftover
+	function testPlaceOrderWithHintAndReferrerOnFeeMarket() public {
+		orderBook.createMarket(address(EURT), address(USDC), 0, 0, 1, 100);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 0, 0, 1, 100);
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		EURT.mint(user2, 1000e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), type(uint).max);
+		USDC.mint(user3, 1000e6);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), type(uint).max);
+
+		// asks at 1..10 and bids at 0.1..0.5, 10 EURT each
+		uint128[] memory asks = new uint128[](11);
+		for (uint i = 1; i <= 10; i++) {
+			vm.prank(user2);
+			asks[i] = orderBook.placeOrder(marketId, SELL, 10e6, i * 1e6);
+		}
+		uint128[] memory bids = new uint128[](6);
+		for (uint i = 1; i <= 5; i++) {
+			vm.prank(user3);
+			bids[i] = orderBook.placeOrder(marketId, BUY, 10e6, i * 0.1e6);
+		}
+
+		// 1. resting ask at 7.5 with a hint at the 7 ask: lands between 7 and 8, no fill so no referral fee
+		vm.prank(user2);
+		uint128 deep = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 7.5e6, asks[7], referrer);
+		assertEq(orderBook.getOrder(marketId, SELL, deep).previousOrderId, asks[7]);
+		assertEq(orderBook.getOrder(marketId, SELL, deep).nextOrderId, asks[8]);
+		assertEq(EURT.balanceOf(referrer), 0);
+		assertEq(USDC.balanceOf(referrer), 0);
+
+		// 2. taker buys 15 EURT at up to 2.00 with a hint and a referrer. Fully fills (10 at 1, 5 at 2), so the hint
+		// is never used. Fee 1% of 15 EURT = 0.15 EURT: 0.075 to referrer, 0.075 to protocol
+		uint user3Usdc = USDC.balanceOf(user3);
+		vm.prank(user3);
+		uint128 id = orderBook.placeOrderWithHint(marketId, BUY, 15e6, 2e6, bids[1], referrer);
+		assertEq(id, 0);
+		assertEq(EURT.balanceOf(user3), 14.85e6);
+		assertEq(user3Usdc - USDC.balanceOf(user3), 20e6); // 10 + 10, unused 10 refunded
+		assertEq(EURT.balanceOf(referrer), 0.075e6);
+		assertEq(EURT.balanceOf(protocolFeeReceiver), 0.075e6);
+		assertEq(orderBook.getFirstOrderId(marketId, SELL), asks[2]);
+		assertEq(orderBook.getOrder(marketId, SELL, asks[2]).baseQuantity, 5e6);
+
+		// 3. taker sells 30 EURT at 0.4 with a referrer: fills the 0.5 and 0.4 bids (9 USDC), posts the
+		// leftover 10 as the new best ask. Fee 1% of 9 USDC = 0.09 USDC: 0.045 to referrer, 0.045 to protocol
+		uint user2Usdc = USDC.balanceOf(user2);
+		vm.prank(user2);
+		uint128 leftover = orderBook.placeOrderWithHint(marketId, SELL, 30e6, 0.4e6, 0, referrer);
+		assertEq(USDC.balanceOf(user2) - user2Usdc, 8.91e6);
+		assertEq(USDC.balanceOf(referrer), 0.045e6);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 0.045e6);
+		assertEq(orderBook.getOrder(marketId, SELL, leftover).baseQuantity, 10e6);
+		assertEq(orderBook.getFirstOrderId(marketId, SELL), leftover);
+		assertEq(orderBook.getOrder(marketId, SELL, leftover).nextOrderId, asks[2]);
+		assertEq(orderBook.getFirstOrderId(marketId, BUY), bids[3]);
+	}
 }
