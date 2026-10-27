@@ -1781,6 +1781,82 @@ contract MatchingOrderBookTest is Test {
 		assertEq(FRZ.balanceOf(bank), 100e6);
 	}
 
+	// Minimums are now at least 1, so a partial fill that would leave a 1 unit sell worth 0 quote refunds
+	// that unit to the maker instead of leaving zero-value dust on the book
+	function testDustOrderZeroQuoteFill() public {
+		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 0, 1);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		EURT.mint(user2, 1000e6);
+		USDC.mint(user3, 1000e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), 100e18);
+
+		// sell 3 units at 0.5 (quote 1), then buy 2 units for 1 quote. The last unit is worth 0 quote,
+		// below the 1 unit quote minimum, so it goes back to the maker and the order is removed
+		vm.prank(user2);
+		uint128 dustId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 3, 0.5e6);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 2, 0.5e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, dustId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+		assertEq(EURT.balanceOf(user3), 2);
+		assertEq(USDC.balanceOf(user2), 1);
+		assertEq(EURT.balanceOf(user2), 1000e6 - 2);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(USDC.balanceOf(bank), 0);
+
+		// a single unit still can't be bought on its own because the quote rounds to 0
+		vm.expectRevert("calculated quote quantity is zero");
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 0.5e6);
+
+		// the book keeps working: a normal sell becomes the head and fills
+		vm.prank(user2);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), askId);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 10e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 90e6);
+		assertEq(EURT.balanceOf(user3), 2 + 10e6);
+		assertEq(USDC.balanceOf(user2), 1 + 10e6);
+
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, askId);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(EURT.balanceOf(user2), 1000e6 - 2 - 10e6);
+
+		// the smallest order the minimums allow (2 units at 0.5, worth exactly 1 quote) sits in front of a normal sell
+		vm.prank(user2);
+		uint128 tinyId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 2, 0.5e6);
+		vm.prank(user2);
+		uint128 nextAskId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), tinyId);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, tinyId).nextOrderId, nextAskId);
+
+		// a buy of 10 at 1.00 goes through the tiny order (2 units for 1 quote) and takes the rest from the next sell
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 10e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, tinyId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), nextAskId);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, nextAskId).previousOrderId, 0);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, nextAskId).baseQuantity, 90e6 + 2);
+		assertEq(EURT.balanceOf(user3), 2 + 20e6);
+		// buyer deposited 10, paid 1 + (10 - 2 units), and got the unused 1 quote unit back
+		assertEq(USDC.balanceOf(user3), 1000e6 - 20e6);
+		assertEq(USDC.balanceOf(user2), 20e6);
+		assertEq(USDC.balanceOf(bank), 0);
+		assertEq(EURT.balanceOf(bank), 90e6 + 2);
+
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, nextAskId);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(EURT.balanceOf(user2), 1000e6 - 20e6 - 2);
+	}
+
 
 	function testCreateMarketSameBaseAndQuoteFail() public {
 		vm.expectRevert("base and quote token must be different");
