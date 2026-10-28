@@ -30,7 +30,7 @@ contract MatchingOrderBookTest is Test {
 	event ProtocolFeeChanged(uint newPercent);
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, MatchingOrderBook.Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
-	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
+	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price, address referrer);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 
 	function setUp() public {
@@ -2962,9 +2962,9 @@ contract MatchingOrderBookTest is Test {
 
 		// buy 250 at up to 1.20: fills 100 at 1.00 and 100 at 1.10, posts 50 at 1.20
 		vm.expectEmit(true, true, true, true, address(orderBook));
-		emit OrderFill(ask1, user2, user1, marketId, 100e6, 1e6);
+		emit OrderFill(ask1, user2, user1, marketId, 100e6, 1e6, address(0));
 		vm.expectEmit(true, true, true, true, address(orderBook));
-		emit OrderFill(ask2, user2, user1, marketId, 100e6, 1.1e6);
+		emit OrderFill(ask2, user2, user1, marketId, 100e6, 1.1e6, address(0));
 		vm.expectEmit(true, true, true, true, address(orderBook));
 		emit OrderPlaced(orderBook.orderCounter() + 1, user1, marketId, MatchingOrderBook.Side.BUY, 50e6, 1.2e6);
 		vm.prank(user1);
@@ -2983,7 +2983,7 @@ contract MatchingOrderBookTest is Test {
 
 		vm.recordLogs();
 		vm.expectEmit(true, true, true, true, address(orderBook));
-		emit OrderFill(askId, user2, user1, marketId, 40e6, 1e6);
+		emit OrderFill(askId, user2, user1, marketId, 40e6, 1e6, address(0));
 		vm.prank(user1);
 		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 40e6, 1e6);
 		assertEq(orderId, 0);

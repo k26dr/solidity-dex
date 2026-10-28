@@ -85,7 +85,7 @@ contract MatchingOrderBook {
 
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
-	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price);
+	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price, address referrer);
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
@@ -218,7 +218,7 @@ contract MatchingOrderBook {
 				uint fillBaseQuantity = (baseQuantity > fillOrder.baseQuantity) ? fillOrder.baseQuantity : baseQuantity;
 				uint fillQuoteQuantity = fillBaseQuantity * fillOrder.price / 10**marketDetails.baseTokenDecimals;
 				placeOrderVars.usedQuoteQuantity += fillQuoteQuantity;
-				emit OrderFill(placeOrderVars.fillOrderId, fillOrder.user, msg.sender, marketId, fillBaseQuantity, fillOrder.price);
+				emit OrderFill(placeOrderVars.fillOrderId, fillOrder.user, msg.sender, marketId, fillBaseQuantity, fillOrder.price, referrer);
 
 				if (side == Side.SELL) {
 					uint takerFee = fillQuoteQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
