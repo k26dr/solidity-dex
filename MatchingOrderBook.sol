@@ -1,21 +1,12 @@
 // Copyright © 2026 Kedar Iyer
 // 
-// This software operates on a freemium royalty scheme. Any person or entity who makes more than $1k USD equivalent via the fee mechanism embedded in this software owes the copyright holder 50% of all fee revenue after $1k as a royalty. This applies to any forks and modified versions of the repository that use this software as well. 
+// This code cannot be deployed, extended, forked, transpiled, scraped, used as training data, or modified in any way without the permission of the owner. 
 // 
-// The copyright holder maintains the right to modify the royalty percentage or minimum at any time and users of this software must comply with the new royalty rules. 
-//
-// The requirement for fee royalties extends to anyone who simply creates markets via the smart contracts as well as anybody who re-deploys these contracts. 
-// 
-// This software can be deployed as is to any chain as long as royalties are maintained, but it cannot be modified in a commercial deployment without a license agreement from the copyright holder. 
-// 
-// The code in this repository cannot be used as training data for any artifical intelligence system. 
-//
 // The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 // 
 // THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-//
+// 
 // We are not responsible for any hacks or loss of funds that occur due to the usage of this contract. 
-
 
 pragma solidity ^0.8.20;
 
