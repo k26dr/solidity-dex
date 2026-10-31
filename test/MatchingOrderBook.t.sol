@@ -22,7 +22,7 @@ contract MatchingOrderBookTest is Test {
 	address user3 = address(0x4);
 	address burnAddress = address(0x6);
 	address referrer = address(0x7);
-	address protocolFeeReceiver = address(0x8);
+	address protocolFeeReceiver = address(0x18);
 
 	// copies of the order book events so tests can check them with vm.expectEmit
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
