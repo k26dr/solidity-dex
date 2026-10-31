@@ -1719,20 +1719,20 @@ contract MatchingOrderBookTest is Test {
 		// withdrawing while still frozen fails and keeps the parked balance
 		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(user2);
-		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 		assertEq(FRZ.balanceOf(bank), 100e6);
 		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
 
 		// once unfrozen the maker withdraws the full amount, and only once
 		FRZ.unfreeze(user2);
 		vm.prank(user2);
-		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 		assertEq(FRZ.balanceOf(user2), 100e6);
 		assertEq(FRZ.balanceOf(bank), 0);
 		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
 		vm.expectRevert("no failed payment balance for user+bank+token combo");
 		vm.prank(user2);
-		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 	}
 
 	// A frozen user can still cancel. The refund is parked and withdrawn after it is unfrozen.
@@ -1754,7 +1754,7 @@ contract MatchingOrderBookTest is Test {
 
 		FRZ.unfreeze(user2);
 		vm.prank(user2);
-		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 		assertEq(FRZ.balanceOf(user2), 100e6);
 		assertEq(FRZ.balanceOf(bank), 0);
 		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
@@ -2525,13 +2525,13 @@ contract MatchingOrderBookTest is Test {
 		// still frozen: withdraw fails and the held balance stays
 		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(frozenReferrer);
-		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0.5e6);
 
 		// unfrozen: referrer withdraws the full share
 		FRZ.unfreeze(frozenReferrer);
 		vm.prank(frozenReferrer);
-		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 		assertEq(FRZ.balanceOf(frozenReferrer), 0.5e6);
 		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0);
 		assertEq(FRZ.balanceOf(bank), 0);
@@ -2882,7 +2882,7 @@ contract MatchingOrderBookTest is Test {
 		vm.expectEmit(true, true, true, true, address(orderBook));
 		emit WithdrawFailedPayment(user2, bank, address(FRZ), 100e6);
 		vm.prank(user2);
-		orderBook.withdrawFailedPayment(bank, address(FRZ));
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 	}
 
 	// createMarket emits the market settings, the cached base token decimals, and the new bank address

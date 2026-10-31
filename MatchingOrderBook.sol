@@ -25,8 +25,17 @@ contract Bank {
 	function withdrawTo(address user, address token, uint amount) external {
 		require(msg.sender == owner, "only owner can withdraw funds");
 		require(amount > 0, "amount is zero");
-		IERC20(token).safeTransfer(user, amount);
+		if (token == address(0)) {
+			(bool sent,) = user.call{value: amount, gas: 100e3}("");
+			require(sent, "native token send to user failed");
+		}
+		else {
+			IERC20(token).safeTransfer(user, amount);
+		}
 	}
+
+	// Contract can receive native token
+	receive() external payable {}
 }
 
 contract MatchingOrderBook {
@@ -128,12 +137,12 @@ contract MatchingOrderBook {
 	}
 
 	// For markets with no fee, or if you would like to see the market fee burned, you can place orders without a referrer
-	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external returns (uint128 orderId) {
+	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external payable returns (uint128 orderId) {
 		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, address(0));
 	}
 
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
-	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external returns (uint128 orderId) {
+	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external payable returns (uint128 orderId) {
 		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, referrer);
 	}
 
@@ -141,13 +150,13 @@ contract MatchingOrderBook {
 	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
 	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
 	// set hintOrderId = 0 if you don't want to include a hint
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId) public returns (uint128 orderId) {
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId) public payable returns (uint128 orderId) {
 		return placeOrderWithHint(marketId, side, baseQuantity, price, hintOrderId, address(0));
 	}
 
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
 	// set hintOrderId = 0 if you don't want to include a hint
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, address referrer) public returns (uint128 orderId) {
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, address referrer) public payable returns (uint128 orderId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
@@ -164,6 +173,14 @@ contract MatchingOrderBook {
 		// We can remove that support if needed. It is a very annoying feature to support. 
 		// Fee-for-transfer tokens can be rejected outright if necessary.
 		if (side == Side.SELL) {
+			// For markets with the native token, the token is deposited. send it to the bank.
+			if (marketDetails.baseToken == address(0)) {
+				require(msg.value == baseQuantity, "improper amount of native token sent");
+				marketDetails.bankAddress.transfer(msg.value);
+			}
+			else {
+				require(msg.value == 0, "native token improperly sent");
+			}
 			IERC20 baseTokenIERC20 = IERC20(marketDetails.baseToken);
 			uint beforeBalance = baseTokenIERC20.balanceOf(marketDetails.bankAddress);
 			baseTokenIERC20.safeTransferFrom(msg.sender, marketDetails.bankAddress, baseQuantity);
@@ -175,6 +192,14 @@ contract MatchingOrderBook {
 				require(placeOrderVars.quoteQuantity > 0, "calculated quote quantity is zero");
 			}
 		} else if (side == Side.BUY) {
+			// For markets with the native token, the token is deposited. send it to the bank.
+			if (marketDetails.quoteToken == address(0)) {
+				require(msg.value == placeOrderVars.quoteQuantity, "improper amount of native token sent");
+				marketDetails.bankAddress.transfer(msg.value);
+			}
+			else {
+				require(msg.value == 0, "native token improperly sent");
+			}
 			IERC20 quoteTokenIERC20 = IERC20(marketDetails.quoteToken);
 			uint beforeBalance = quoteTokenIERC20.balanceOf(marketDetails.bankAddress);
 			quoteTokenIERC20.safeTransferFrom(msg.sender, marketDetails.bankAddress, placeOrderVars.quoteQuantity);
@@ -216,7 +241,7 @@ contract MatchingOrderBook {
 					uint protocolFee = fillQuoteQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
 					uint quoteQuantityMinusFees = fillQuoteQuantity - takerFee - protocolFee;
 					if (quoteQuantityMinusFees > 0) {
-						Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
+						_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
 					}
 					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
 					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.quoteToken, takerFee);
@@ -224,7 +249,7 @@ contract MatchingOrderBook {
 				} else {
 					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
-					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
+					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
 					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
 					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.baseToken, takerFee);
 					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.baseToken, protocolFee);
@@ -280,9 +305,7 @@ contract MatchingOrderBook {
 					// refund leftover funds if necessary
 					if (side == Side.BUY) {
 						uint remainingQuoteQuantity = placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity;
-						if (remainingQuoteQuantity > 0) {
-							Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
-						}
+						_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
 					}
 					reentrancyGuard = false;
 					return 0;
@@ -299,13 +322,11 @@ contract MatchingOrderBook {
 			// refund orders which filled but can't post
 			if (placeOrderVars.fillOccurred && !canPost) {
 				if (side == Side.SELL) {
-					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.baseToken, baseQuantity);
+					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.baseToken, baseQuantity);
 				} else {
 					// remainingQuoteQuantity and postQuoteQuantity can diverge significantly for orders that fill off the submitted taker price
 					uint remainingQuoteQuantity = placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity;
-					if (remainingQuoteQuantity > 0) {
-						Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
-					}
+					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
 				}
 				reentrancyGuard = false;
 				return 0;
@@ -362,9 +383,7 @@ contract MatchingOrderBook {
 			// refund leftover funds if necessary
 			if (side == Side.BUY) {
 				uint remainingQuoteQuantity = placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity;
-				if (remainingQuoteQuantity > 0) {
-					Bank(marketDetails.bankAddress).withdrawTo(msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
-				}
+				_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
 			}
 		}
 
@@ -399,7 +418,7 @@ contract MatchingOrderBook {
 		reentrancyGuard = false;
 	}
 
-	function withdrawFailedPayment(address bankAddress, address token) public {
+	function withdrawFailedPayment(address payable bankAddress, address token) public {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		uint amountToSend = failedPayments[msg.sender][bankAddress][token];
@@ -410,7 +429,7 @@ contract MatchingOrderBook {
 		reentrancyGuard = false;
 	}
 
-	function _payOrPark(address bank, address to, address token, uint amount) internal {
+	function _payOrPark(address payable bank, address to, address token, uint amount) internal {
 		if (amount == 0) return;
 		try Bank(bank).withdrawTo{gas: 110e3}(to, token, amount) {}
 		catch {
