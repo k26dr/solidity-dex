@@ -3061,4 +3061,192 @@ contract MatchingOrderBookTest is Test {
 		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1);
 		assertTrue(orderBook.getMarketDetails(orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 0, 1)).bankAddress != address(0));
 	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Native token markets. address(0) stands for the chain's native token and is deposited via msg.value.
+	// Fresh addresses are used so native payouts never land on a precompile.
+	// ---------------------------------------------------------------------------------------------
+	address ethUser1 = address(0x11);
+	address ethUser2 = address(0x12);
+	address ethReferrer = address(0x13);
+
+	// USDC base (6 decimals), native quote. price is wei per 1 USDC. 0.1% fee.
+	function _setUpNativeQuoteMarket() internal returns (bytes32 marketId, address payable bank) {
+		orderBook.createMarket(address(USDC), address(0), 1, 1, 1, 1000);
+		marketId = orderBook.getMarketId(address(USDC), address(0), 1, 1, 1, 1000);
+		bank = orderBook.getMarketDetails(marketId).bankAddress;
+		_fundNativeUsers();
+	}
+
+	// native base (18 decimals), USDC quote. price is USDC units per 1 ETH. 0.1% fee.
+	function _setUpNativeBaseMarket() internal returns (bytes32 marketId, address payable bank) {
+		orderBook.createMarket(address(0), address(USDC), 1, 1, 1, 1000);
+		marketId = orderBook.getMarketId(address(0), address(USDC), 1, 1, 1, 1000);
+		bank = orderBook.getMarketDetails(marketId).bankAddress;
+		assertEq(orderBook.getMarketDetails(marketId).baseTokenDecimals, 18);
+		_fundNativeUsers();
+	}
+
+	function _fundNativeUsers() internal {
+		vm.deal(ethUser1, 10 ether);
+		vm.deal(ethUser2, 10 ether);
+		USDC.mint(ethUser1, 10000e6);
+		USDC.mint(ethUser2, 10000e6);
+		vm.prank(ethUser1);
+		USDC.approve(address(orderBook), type(uint).max);
+		vm.prank(ethUser2);
+		USDC.approve(address(orderBook), type(uint).max);
+	}
+
+	// Maker asks 100 USDC at 0.0005 ETH each. Taker buys with 0.05 ETH. Taker fee is in base (USDC).
+	function testNativeQuoteTakerBuy() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeQuoteMarket();
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 0.0005e18);
+		assertEq(USDC.balanceOf(bank), 100e6);
+
+		vm.prank(ethUser2);
+		uint128 bidId = orderBook.placeOrder{value: 0.05e18}(marketId, MatchingOrderBook.Side.BUY, 100e6, 0.0005e18, ethReferrer);
+		assertEq(bidId, 0, "taker fully filled, nothing posted");
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+
+		assertEq(ethUser1.balance, 10 ether + 0.05e18, "maker receives the ETH");
+		assertEq(ethUser2.balance, 10 ether - 0.05e18);
+		assertEq(USDC.balanceOf(ethUser2), 10000e6 + 100e6 - 0.1e6, "taker gets USDC minus 0.1% fee");
+		assertEq(USDC.balanceOf(ethReferrer), 0.05e6);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 0.05e6);
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// Maker bids 100 USDC at 0.0005 ETH each with 0.05 ETH. Taker sells 100 USDC. Taker fee is in quote (ETH).
+	function testNativeQuoteTakerSell() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeQuoteMarket();
+		vm.prank(ethUser2);
+		uint128 bidId = orderBook.placeOrder{value: 0.05e18}(marketId, MatchingOrderBook.Side.BUY, 100e6, 0.0005e18);
+		assertEq(bank.balance, 0.05e18);
+
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 0.0005e18, ethReferrer);
+		assertEq(askId, 0, "taker fully filled, nothing posted");
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+
+		assertEq(ethUser1.balance, 10 ether + 0.05e18 - 0.00005e18, "taker gets ETH minus 0.1% fee");
+		assertEq(ethReferrer.balance, 0.000025e18);
+		assertEq(protocolFeeReceiver.balance, 0.000025e18);
+		assertEq(USDC.balanceOf(ethUser2), 10000e6 + 100e6, "maker receives the USDC");
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 - 100e6);
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// Maker bids 1 ETH at 2000 USDC. Taker sells 1 ETH via msg.value. Taker fee is in quote (USDC).
+	function testNativeBaseTakerSell() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
+		vm.prank(ethUser2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 2000e6);
+		assertEq(USDC.balanceOf(bank), 2000e6);
+
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6, ethReferrer);
+		assertEq(askId, 0, "taker fully filled, nothing posted");
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+
+		assertEq(ethUser2.balance, 10 ether + 1e18, "maker receives the ETH");
+		assertEq(ethUser1.balance, 10 ether - 1e18);
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6 - 2e6, "taker gets USDC minus 0.1% fee");
+		assertEq(USDC.balanceOf(ethReferrer), 1e6);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 1e6);
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// Maker asks 1 ETH at 2000 USDC via msg.value. Taker buys with 2000 USDC. Taker fee is in base (ETH).
+	function testNativeBaseTakerBuy() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+		assertEq(bank.balance, 1e18);
+
+		vm.prank(ethUser2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e18, 2000e6, ethReferrer);
+		assertEq(bidId, 0, "taker fully filled, nothing posted");
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+
+		assertEq(ethUser2.balance, 10 ether + 1e18 - 0.001e18, "taker gets ETH minus 0.1% fee");
+		assertEq(ethReferrer.balance, 0.0005e18);
+		assertEq(protocolFeeReceiver.balance, 0.0005e18);
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6, "maker receives the USDC");
+		assertEq(USDC.balanceOf(ethUser2), 10000e6 - 2000e6);
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// A taker bid above the ask fills at the ask price and the ETH difference is refunded
+	function testNativeQuoteBuyPriceImprovementRefundsEth() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeQuoteMarket();
+		vm.prank(ethUser1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 0.0005e18);
+
+		// bid 0.0006 per USDC, deposit 0.06 ETH, fill at 0.0005 for 0.05 ETH
+		vm.prank(ethUser2);
+		orderBook.placeOrder{value: 0.06e18}(marketId, MatchingOrderBook.Side.BUY, 100e6, 0.0006e18);
+		assertEq(ethUser2.balance, 10 ether - 0.05e18, "only the fill price is spent, the rest comes back");
+		assertEq(ethUser1.balance, 10 ether + 0.05e18);
+		assertEq(bank.balance, 0);
+	}
+
+	// Posted native orders on both market types are refunded in full on cancel
+	function testNativeCancelRefundsEth() public {
+		(bytes32 quoteMarketId, address payable quoteBank) = _setUpNativeQuoteMarket();
+		vm.prank(ethUser2);
+		uint128 bidId = orderBook.placeOrder{value: 0.05e18}(quoteMarketId, MatchingOrderBook.Side.BUY, 100e6, 0.0005e18);
+		assertEq(quoteBank.balance, 0.05e18);
+		vm.prank(ethUser2);
+		orderBook.cancelOrder(quoteMarketId, MatchingOrderBook.Side.BUY, bidId);
+		assertEq(ethUser2.balance, 10 ether);
+		assertEq(quoteBank.balance, 0);
+
+		(bytes32 baseMarketId, address payable baseBank) = _setUpNativeBaseMarket();
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(baseMarketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+		assertEq(baseBank.balance, 1e18);
+		vm.prank(ethUser1);
+		orderBook.cancelOrder(baseMarketId, MatchingOrderBook.Side.SELL, askId);
+		assertEq(ethUser1.balance, 10 ether);
+		assertEq(baseBank.balance, 0);
+	}
+
+	// msg.value must match the native side exactly and must be zero everywhere else
+	function testNativeWrongMsgValueReverts() public {
+		(bytes32 quoteMarketId, ) = _setUpNativeQuoteMarket();
+		(bytes32 baseMarketId, ) = _setUpNativeBaseMarket();
+		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1);
+		bytes32 erc20MarketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 0, 1);
+
+		// too little and too much on the native side
+		vm.prank(ethUser2);
+		vm.expectRevert("improper amount of native token sent");
+		orderBook.placeOrder{value: 0.05e18 - 1}(quoteMarketId, MatchingOrderBook.Side.BUY, 100e6, 0.0005e18);
+		vm.prank(ethUser1);
+		vm.expectRevert("improper amount of native token sent");
+		orderBook.placeOrder{value: 1e18 + 1}(baseMarketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+
+		// ETH sent on the ERC20 side of a native market
+		vm.prank(ethUser1);
+		vm.expectRevert("native token improperly sent");
+		orderBook.placeOrder{value: 1}(quoteMarketId, MatchingOrderBook.Side.SELL, 100e6, 0.0005e18);
+		vm.prank(ethUser2);
+		vm.expectRevert("native token improperly sent");
+		orderBook.placeOrder{value: 1}(baseMarketId, MatchingOrderBook.Side.BUY, 1e18, 2000e6);
+
+		// ETH sent to a market with no native side
+		vm.prank(ethUser1);
+		vm.expectRevert("native token improperly sent");
+		orderBook.placeOrder{value: 1}(erc20MarketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+
+		// nothing was deposited anywhere
+		assertEq(ethUser1.balance, 10 ether);
+		assertEq(ethUser2.balance, 10 ether);
+	}
 }
