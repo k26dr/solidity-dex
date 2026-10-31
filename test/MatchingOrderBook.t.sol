@@ -1554,8 +1554,9 @@ contract MatchingOrderBookTest is Test {
 		attacker.approve(address(PAY));
 	}
 
-	// Taker payouts are sent directly, so a re-entering taker reverts the whole trade
-	function testReentryAsTakerReverts() public {
+	// Taker payouts go through _payOrPark, so a re-entering taker cannot block the fill. The reentry is rejected
+	// by the guard, the payout reverts and is parked, and the maker is still paid.
+	function testReentryAsTakerParksPayment() public {
 		(PayableERC20 PAY, bytes32 marketId, address bank, ReentrantReceiver attacker) = _setUpPayableMarket();
 		PAY.mint(user2, 100e6);
 		vm.prank(user2);
@@ -1563,23 +1564,37 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user2);
 		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
 		EURT.mint(address(attacker), 100e6);
+		uint128 counterBefore = orderBook.orderCounter();
 
 		attacker.setAttack(ReentrantReceiver.Attack.PLACE_ORDER);
-		vm.expectRevert("malicious attack");
+		vm.expectEmit(true, true, true, true);
+		emit PaymentFailed(address(attacker), bank, address(PAY), 100e6);
 		attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
 
-		// nothing moved
-		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6);
-		assertEq(EURT.balanceOf(address(attacker)), 100e6);
+		// the fill went through and the maker was paid, but the attacker's payout stays in the bank
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+		assertEq(EURT.balanceOf(address(attacker)), 0);
+		assertEq(EURT.balanceOf(user2), 100e6);
 		assertEq(PAY.balanceOf(address(attacker)), 0);
 		assertEq(PAY.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
 
-		// the guard is released, so an honest fill still works
+		// the re-entered placeOrder was rejected, so no order was created by it
+		assertEq(orderBook.orderCounter(), counterBefore);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+
+		// re-entering while withdrawing the parked payment also fails
+		attacker.setAttack(ReentrantReceiver.Attack.WITHDRAW_FAILED_PAYMENT);
+		vm.expectRevert("malicious attack");
+		attacker.withdrawFailedPayment(address(PAY));
+		assertEq(PAY.balanceOf(bank), 100e6);
+
+		// the guard is released, so an honest withdraw recovers the parked payment
 		attacker.setAttack(ReentrantReceiver.Attack.NONE);
-		attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		attacker.withdrawFailedPayment(address(PAY));
 		assertEq(PAY.balanceOf(address(attacker)), 100e6);
-		assertEq(EURT.balanceOf(user2), 100e6);
 		assertEq(PAY.balanceOf(bank), 0);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 0);
 	}
 
 	// Maker payouts go through _payOrPark, so a re-entering maker cannot block the taker and its payment is parked
@@ -1760,8 +1775,8 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
 	}
 
-	// A frozen taker is paid directly, so the whole trade reverts and the maker's order is untouched
-	function testFrozenTakerReverts() public {
+	// Taker payouts also go through _payOrPark, so a frozen taker's trade still fills and its payment is parked
+	function testFrozenTakerPaymentParked() public {
 		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
 		FRZ.mint(user2, 100e6);
 		EURT.mint(user3, 100e6);
@@ -1773,12 +1788,29 @@ contract MatchingOrderBookTest is Test {
 		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		FRZ.freeze(user3);
 
-		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(user3);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, referrer);
-		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6);
-		assertEq(EURT.balanceOf(user3), 100e6);
+
+		// maker is filled and paid, taker's FRZ stays in the bank as a failed payment
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+		assertEq(EURT.balanceOf(user2), 100e6);
+		assertEq(EURT.balanceOf(user3), 0);
+		assertEq(FRZ.balanceOf(user3), 0);
 		assertEq(FRZ.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(user3, bank, address(FRZ)), 100e6);
+
+		// withdrawing while still frozen reverts and keeps the balance parked
+		vm.expectRevert("ERC20: recipient is frozen");
+		vm.prank(user3);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
+		assertEq(orderBook.failedPaymentBalance(user3, bank, address(FRZ)), 100e6);
+
+		FRZ.unfreeze(user3);
+		vm.prank(user3);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
+		assertEq(FRZ.balanceOf(user3), 100e6);
+		assertEq(FRZ.balanceOf(bank), 0);
+		assertEq(orderBook.failedPaymentBalance(user3, bank, address(FRZ)), 0);
 	}
 
 	// Minimums are now at least 1, so a partial fill that would leave a 1 unit sell worth 0 quote refunds
@@ -1982,9 +2014,10 @@ contract MatchingOrderBookTest is Test {
 		bank.withdrawTo(user1, address(USDC), 0);
 	}
 
-	// Taker receives PAY directly and re-enters createMarket from the token callback
-	function testReentryCreateMarketReverts() public {
-		(PayableERC20 PAY, bytes32 marketId, , ReentrantReceiver attacker) = _setUpPayableMarket();
+	// Taker re-enters createMarket from the token callback. The guard rejects it, the payout is parked,
+	// and no market is created.
+	function testReentryCreateMarketParksPayment() public {
+		(PayableERC20 PAY, bytes32 marketId, address bank, ReentrantReceiver attacker) = _setUpPayableMarket();
 		PAY.mint(user2, 100e6);
 		vm.prank(user2);
 		PAY.approve(address(orderBook), 100e18);
@@ -1993,8 +2026,19 @@ contract MatchingOrderBookTest is Test {
 		EURT.mint(address(attacker), 100e6);
 
 		attacker.setAttack(ReentrantReceiver.Attack.CREATE_MARKET);
-		vm.expectRevert("malicious attack");
+		vm.expectEmit(true, true, true, true);
+		emit PaymentFailed(address(attacker), bank, address(PAY), 100e6);
 		attacker.placeOrder(MatchingOrderBook.Side.SELL, 100e6, 1e6);
+
+		// the market the callback tried to create does not exist
+		bytes32 attackMarketId = orderBook.getMarketId(address(1), address(2), 1, 1, 0, 1);
+		assertEq(orderBook.getMarketDetails(attackMarketId).bankAddress, address(0));
+
+		// maker paid, attacker's payout parked
+		assertEq(EURT.balanceOf(user2), 100e6);
+		assertEq(PAY.balanceOf(address(attacker)), 0);
+		assertEq(PAY.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
 	}
 
 	function testConstructorProtocolFeeOver50Reverts() public {
