@@ -129,8 +129,17 @@ contract MatchingOrderBook {
 		bytes32 marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator);
 		require(MARKET_DETAILS[marketId].bankAddress == address(0), "market has already been created");
 		address payable bankAddress = payable(address(new Bank(address(this))));
-		(bool decimalCallSuccess, uint8 baseTokenDecimals) = IERC20(baseToken).tryGetDecimals();
-		require(decimalCallSuccess, "failed to get decimals for token");
+		uint8 baseTokenDecimals;
+		if (baseToken == address(0)) {
+			// This is a little brittle. I'm not sure I can guarantee native tokens have 18 decimals. 
+			// But I'm not sure it's possible to check in solidity either.
+			baseTokenDecimals = 18;
+		}
+		else {
+			(bool decimalCallSuccess, uint8 baseTokenDecimalsVal) = IERC20(baseToken).tryGetDecimals();
+			require(decimalCallSuccess, "failed to get decimals for token");
+			baseTokenDecimals = baseTokenDecimalsVal;
+		}
 		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, bankAddress);
 		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, bankAddress);
 		reentrancyGuard = false;
