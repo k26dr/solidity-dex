@@ -180,16 +180,16 @@ contract MatchingOrderBook {
 			}
 			else {
 				require(msg.value == 0, "native token improperly sent");
-			}
-			IERC20 baseTokenIERC20 = IERC20(marketDetails.baseToken);
-			uint beforeBalance = baseTokenIERC20.balanceOf(marketDetails.bankAddress);
-			baseTokenIERC20.safeTransferFrom(msg.sender, marketDetails.bankAddress, baseQuantity);
-			uint afterBalance = baseTokenIERC20.balanceOf(marketDetails.bankAddress);
-			uint transferredBaseQuantity = afterBalance - beforeBalance;
-			if (transferredBaseQuantity != baseQuantity) {
-				baseQuantity = transferredBaseQuantity;
-				placeOrderVars.quoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
-				require(placeOrderVars.quoteQuantity > 0, "calculated quote quantity is zero");
+				IERC20 baseTokenIERC20 = IERC20(marketDetails.baseToken);
+				uint beforeBalance = baseTokenIERC20.balanceOf(marketDetails.bankAddress);
+				baseTokenIERC20.safeTransferFrom(msg.sender, marketDetails.bankAddress, baseQuantity);
+				uint afterBalance = baseTokenIERC20.balanceOf(marketDetails.bankAddress);
+				uint transferredBaseQuantity = afterBalance - beforeBalance;
+				if (transferredBaseQuantity != baseQuantity) {
+					baseQuantity = transferredBaseQuantity;
+					placeOrderVars.quoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
+					require(placeOrderVars.quoteQuantity > 0, "calculated quote quantity is zero");
+				}
 			}
 		} else if (side == Side.BUY) {
 			// For markets with the native token, the token is deposited. send it to the bank.
@@ -199,17 +199,17 @@ contract MatchingOrderBook {
 			}
 			else {
 				require(msg.value == 0, "native token improperly sent");
-			}
-			IERC20 quoteTokenIERC20 = IERC20(marketDetails.quoteToken);
-			uint beforeBalance = quoteTokenIERC20.balanceOf(marketDetails.bankAddress);
-			quoteTokenIERC20.safeTransferFrom(msg.sender, marketDetails.bankAddress, placeOrderVars.quoteQuantity);
-			uint afterBalance = quoteTokenIERC20.balanceOf(marketDetails.bankAddress);
-			uint transferredQuoteQuantity = afterBalance - beforeBalance;
-			if (transferredQuoteQuantity != placeOrderVars.quoteQuantity) {
-				require(transferredQuoteQuantity > 0, "transferred quote quantity is zero");
-				placeOrderVars.quoteQuantity = transferredQuoteQuantity;
-				price = transferredQuoteQuantity * 10**marketDetails.baseTokenDecimals / baseQuantity;
-				require(price > 0, "adjusted price is zero");
+				IERC20 quoteTokenIERC20 = IERC20(marketDetails.quoteToken);
+				uint beforeBalance = quoteTokenIERC20.balanceOf(marketDetails.bankAddress);
+				quoteTokenIERC20.safeTransferFrom(msg.sender, marketDetails.bankAddress, placeOrderVars.quoteQuantity);
+				uint afterBalance = quoteTokenIERC20.balanceOf(marketDetails.bankAddress);
+				uint transferredQuoteQuantity = afterBalance - beforeBalance;
+				if (transferredQuoteQuantity != placeOrderVars.quoteQuantity) {
+					require(transferredQuoteQuantity > 0, "transferred quote quantity is zero");
+					placeOrderVars.quoteQuantity = transferredQuoteQuantity;
+					price = transferredQuoteQuantity * 10**marketDetails.baseTokenDecimals / baseQuantity;
+					require(price > 0, "adjusted price is zero");
+				}
 			}
 		}
 
