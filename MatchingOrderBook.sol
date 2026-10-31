@@ -249,9 +249,7 @@ contract MatchingOrderBook {
 					uint takerFee = fillQuoteQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = fillQuoteQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
 					uint quoteQuantityMinusFees = fillQuoteQuantity - takerFee - protocolFee;
-					if (quoteQuantityMinusFees > 0) {
-						_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
-					}
+					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
 					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
 					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.quoteToken, takerFee);
 					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
