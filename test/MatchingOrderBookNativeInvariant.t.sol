@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../MatchingOrderBook.sol";
 import "../libraries/MockERC20.sol";
 
+// THIS FILE WAS GENERATED ENTIRELY BY CLAUDE OPUS 5.5 FOR TESTING PURPOSES
 // Native token version of MatchingOrderBookInvariant.t.sol.
 //
 // Explanation: A handler with 4 traders randomly places and cancels orders on two native token markets, both
