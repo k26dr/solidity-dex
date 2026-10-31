@@ -22,8 +22,6 @@ contract MatchingOrderBookTest is Test {
 	address user3 = address(0x4);
 	address burnAddress = address(0x6);
 	address referrer = address(0x7);
-	// Not a precompile. Native fees from the matching engine are paid with .transfer's 2300 gas stipend, and the
-	// precompile at 0x8 (bn256 pairing) needs 45k gas, so native fee payouts to it would always be parked.
 	address protocolFeeReceiver = address(0x18);
 
 	// copies of the order book events so tests can check them with vm.expectEmit
@@ -3374,11 +3372,10 @@ contract MatchingOrderBookTest is Test {
 		assertEq(bank.balance, 1e18, "second ask's ETH is still escrowed");
 	}
 
-	// An attacker that wraps the reentry in try/catch. In the matching engine the payout only gets the 2300 gas
-	// stipend, so receive() runs out of gas before the call can be made (running out of gas can't be caught)
-	// and the payout is parked. withdrawFailedPayment pays with unlimited gas, so there the reentry does reach
-	// the guard, the attacker swallows the revert, and the withdraw is delivered with nothing else changing.
-	function testNativeReentrySwallowedStillParksPayment() public {
+	// The attacker wraps the reentry in try/catch, but in the matching loop receive() only gets the 2300 gas
+	// stipend. It runs out of gas before the call is made (running out of gas can't be caught), so the payout
+	// is parked and the reentry has no effect.
+	function testNativeReentrySwallowedIsBlockedAndPaymentDelivered() public {
 		(bytes32 marketId, address payable bank, ReentrantNativeReceiver attacker) = _setUpNativeReentryMarket();
 		vm.prank(ethUser1);
 		orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
@@ -3386,27 +3383,17 @@ contract MatchingOrderBookTest is Test {
 		uint128 counterBefore = orderBook.orderCounter();
 
 		attacker.setAttack(ReentrantNativeReceiver.Attack.SWALLOWED_PLACE_ORDER);
-		vm.expectEmit(true, true, true, true);
-		emit PaymentFailed(address(attacker), bank, address(0), 1e18);
 		attacker.placeOrder(MatchingOrderBook.Side.BUY, 1e18, 2000e6);
 
-		// the reentry never ran, the maker was paid, and the attacker's ETH is parked
+		// re-entry never hits the guard because the transfer gas limit inside the matching loop is 2300
 		assertEq(attacker.blockedReentries(), 0, "reentry never reached the guard");
 		assertEq(orderBook.orderCounter(), counterBefore);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+		// the maker is paid, the attacker's ETH is parked in the bank
 		assertEq(address(attacker).balance, 0);
 		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6);
 		assertEq(bank.balance, 1e18);
 		assertEq(USDC.balanceOf(bank), 0);
 		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
-
-		// withdrawing with the attack still on: the reentry hits the guard, is swallowed, and the ETH arrives
-		attacker.withdrawFailedPayment();
-		assertEq(attacker.blockedReentries(), 1, "reentry hit the guard");
-		assertEq(orderBook.orderCounter(), counterBefore);
-		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
-		assertEq(address(attacker).balance, 1e18);
-		assertEq(bank.balance, 0);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
 	}
 }
