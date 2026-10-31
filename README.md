@@ -20,6 +20,4 @@ To improve order insertion efficiency for orders that go deep in the book, `plac
 
 Token recovery in cases where a token contract freezes an address is also supported using `withdrawFailedPayment`. Example: USDC freezes an address. The funds get parked in the contract in risk isolation mode and can be accessed when the address has been unfrozen.
 
-This repository has been audited by Claude Opus 5.5 and Claude Fable 5.1. No major or minor bugs that could lead to loss of funds have been found. You can verify that yourself if needed. 
-
 A frontend is under development. 
