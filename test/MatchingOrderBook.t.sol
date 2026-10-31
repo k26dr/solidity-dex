@@ -7,6 +7,7 @@ import "../libraries/MockERC20.sol";
 import "./FeeOnTransferERC20.sol";
 import "./PayableERC20.sol";
 import "./FreezableERC20.sol";
+import "./ReentrantNativeReceiver.sol";
 
 contract MatchingOrderBookTest is Test {
 	MatchingOrderBook orderBook;
@@ -3248,5 +3249,148 @@ contract MatchingOrderBookTest is Test {
 		// nothing was deposited anywhere
 		assertEq(ethUser1.balance, 10 ether);
 		assertEq(ethUser2.balance, 10 ether);
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Re-entrancy through native token payouts. Bank.withdrawTo sends native token with a raw call,
+	// so a contract recipient gets control in receive(). Fee-free ETH / USDC market so payouts are exact.
+	// ---------------------------------------------------------------------------------------------
+	function _setUpNativeReentryMarket() internal returns (bytes32 marketId, address payable bank, ReentrantNativeReceiver attacker) {
+		orderBook.createMarket(address(0), address(USDC), 1, 1, 0, 1);
+		marketId = orderBook.getMarketId(address(0), address(USDC), 1, 1, 0, 1);
+		bank = orderBook.getMarketDetails(marketId).bankAddress;
+		attacker = new ReentrantNativeReceiver(orderBook, marketId);
+		attacker.approve(address(USDC));
+		_fundNativeUsers();
+	}
+
+	// Attacker buys ETH as taker and tries to sell it straight back from receive(). The guard rejects the
+	// reentry, the ETH payout is parked, and the maker is still paid.
+	function testNativeReentryAsTakerParksPayment() public {
+		(bytes32 marketId, address payable bank, ReentrantNativeReceiver attacker) = _setUpNativeReentryMarket();
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+		USDC.mint(address(attacker), 2000e6);
+		uint128 counterBefore = orderBook.orderCounter();
+
+		attacker.setAttack(ReentrantNativeReceiver.Attack.PLACE_ORDER);
+		vm.expectEmit(true, true, true, true);
+		emit PaymentFailed(address(attacker), bank, address(0), 1e18);
+		attacker.placeOrder(MatchingOrderBook.Side.BUY, 1e18, 2000e6);
+
+		// the fill went through and the maker was paid, but the attacker's ETH stays in the bank
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6);
+		assertEq(ethUser1.balance, 10 ether - 1e18);
+		assertEq(USDC.balanceOf(address(attacker)), 0);
+		assertEq(address(attacker).balance, 0);
+		assertEq(bank.balance, 1e18);
+		assertEq(USDC.balanceOf(bank), 0);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+
+		// the re-entered placeOrder was rejected, so no order was created by it
+		assertEq(orderBook.orderCounter(), counterBefore);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+
+		// re-entering while withdrawing the parked ETH fails too. The raw call in Bank swallows the inner
+		// "malicious attack" reason, so the revert surfaces as the bank's send failure.
+		attacker.setAttack(ReentrantNativeReceiver.Attack.WITHDRAW_FAILED_PAYMENT);
+		vm.expectRevert("native token send to user failed");
+		attacker.withdrawFailedPayment();
+		assertEq(bank.balance, 1e18);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+
+		// the guard is released, so an honest withdraw recovers the parked ETH exactly once
+		attacker.setAttack(ReentrantNativeReceiver.Attack.NONE);
+		attacker.withdrawFailedPayment();
+		assertEq(address(attacker).balance, 1e18);
+		assertEq(bank.balance, 0);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
+		vm.expectRevert("no failed payment balance for user+bank+token combo");
+		attacker.withdrawFailedPayment();
+	}
+
+	// Attacker's resting bid is filled by an ETH seller. Its receive() re-enters, the maker payout is parked,
+	// and the taker still gets its USDC.
+	function testNativeReentryAsMakerParksPayment() public {
+		(bytes32 marketId, address payable bank, ReentrantNativeReceiver attacker) = _setUpNativeReentryMarket();
+		USDC.mint(address(attacker), 2000e6);
+		uint128 bidId = attacker.placeOrder(MatchingOrderBook.Side.BUY, 1e18, 2000e6);
+		assertEq(USDC.balanceOf(bank), 2000e6);
+		uint128 counterBefore = orderBook.orderCounter();
+
+		attacker.setAttack(ReentrantNativeReceiver.Attack.PLACE_ORDER);
+		vm.expectEmit(true, true, true, true);
+		emit PaymentFailed(address(attacker), bank, address(0), 1e18);
+		vm.prank(ethUser1);
+		orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+
+		// taker is paid, maker order is filled, maker's ETH stays in the bank
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6);
+		assertEq(ethUser1.balance, 10 ether - 1e18);
+		assertEq(address(attacker).balance, 0);
+		assertEq(bank.balance, 1e18);
+		assertEq(USDC.balanceOf(bank), 0);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+		assertEq(orderBook.orderCounter(), counterBefore);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+
+		attacker.setAttack(ReentrantNativeReceiver.Attack.NONE);
+		attacker.withdrawFailedPayment();
+		assertEq(address(attacker).balance, 1e18);
+		assertEq(bank.balance, 0);
+	}
+
+	// Attacker cancels one ETH ask and, from receive(), tries to cancel its second ask in the same call.
+	// The refund is parked and the second ask is left untouched.
+	function testNativeReentryOnCancelParksRefund() public {
+		(bytes32 marketId, address payable bank, ReentrantNativeReceiver attacker) = _setUpNativeReentryMarket();
+		vm.deal(address(this), 2 ether);
+		uint128 firstAskId = attacker.placeOrder{value: 1e18}(MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+		uint128 secondAskId = attacker.placeOrder{value: 1e18}(MatchingOrderBook.Side.SELL, 1e18, 2100e6);
+		assertEq(bank.balance, 2e18);
+
+		attacker.setTargetOrderId(secondAskId);
+		attacker.setAttack(ReentrantNativeReceiver.Attack.CANCEL_ORDER);
+		vm.expectEmit(true, true, true, true);
+		emit PaymentFailed(address(attacker), bank, address(0), 1e18);
+		attacker.cancelOrder(MatchingOrderBook.Side.SELL, firstAskId);
+
+		// first ask is gone, second ask survived the re-entered cancel, refund is parked
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, firstAskId).baseQuantity, 0);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, secondAskId).baseQuantity, 1e18);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), secondAskId);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, secondAskId).previousOrderId, 0);
+		assertEq(address(attacker).balance, 0);
+		assertEq(bank.balance, 2e18);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+
+		attacker.setAttack(ReentrantNativeReceiver.Attack.NONE);
+		attacker.withdrawFailedPayment();
+		assertEq(address(attacker).balance, 1e18);
+		assertEq(bank.balance, 1e18, "second ask's ETH is still escrowed");
+	}
+
+	// If the attacker catches the guard's revert, receive() succeeds and the payout is delivered normally.
+	// The reentry itself still has no effect.
+	function testNativeReentrySwallowedIsBlockedAndPaymentDelivered() public {
+		(bytes32 marketId, address payable bank, ReentrantNativeReceiver attacker) = _setUpNativeReentryMarket();
+		vm.prank(ethUser1);
+		orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+		USDC.mint(address(attacker), 2000e6);
+		uint128 counterBefore = orderBook.orderCounter();
+
+		attacker.setAttack(ReentrantNativeReceiver.Attack.SWALLOWED_PLACE_ORDER);
+		attacker.placeOrder(MatchingOrderBook.Side.BUY, 1e18, 2000e6);
+
+		assertEq(attacker.blockedReentries(), 1, "reentry hit the guard");
+		assertEq(orderBook.orderCounter(), counterBefore);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+		assertEq(address(attacker).balance, 1e18);
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6);
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
 	}
 }
