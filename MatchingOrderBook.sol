@@ -22,12 +22,17 @@ contract Bank {
 		owner = _owner;
 	}
 
-	function withdrawTo(address user, address token, uint amount) external {
+	function withdrawTo(address user, address token, uint amount, bool allowUnlimitedGasForNativeToken) external {
 		require(msg.sender == owner, "only owner can withdraw funds");
 		require(amount > 0, "amount is zero");
 		if (token == address(0)) {
-			(bool sent,) = user.call{value: amount}("");
-			require(sent, "native token send to user failed");
+			if (allowUnlimitedGasForNativeToken) {
+				(bool sent,) = user.call{value: amount}("");
+				require(sent, "native token send to user failed");
+			}
+			else {
+				payable(user).transfer(amount);
+			}
 		}
 		else {
 			IERC20(token).safeTransfer(user, amount);
@@ -432,13 +437,13 @@ contract MatchingOrderBook {
 		require(amountToSend > 0, "no failed payment balance for user+bank+token combo");
 		failedPayments[msg.sender][bankAddress][token] = 0;
 		emit WithdrawFailedPayment(msg.sender, bankAddress, token, amountToSend);
-		Bank(bankAddress).withdrawTo(msg.sender, token, amountToSend);
+		Bank(bankAddress).withdrawTo(msg.sender, token, amountToSend, true);
 		reentrancyGuard = false;
 	}
 
 	function _payOrPark(address payable bank, address to, address token, uint amount) internal {
 		if (amount == 0) return;
-		try Bank(bank).withdrawTo{gas: 110e3}(to, token, amount) {}
+		try Bank(bank).withdrawTo{gas: 110e3}(to, token, amount, false) {}
 		catch {
 			failedPayments[to][bank][token] += amount;
 			emit PaymentFailed(to, bank, token, amount);

@@ -68,7 +68,7 @@ contract MatchingOrderBookTest is Test {
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 10e6, 0, 1);
 		MatchingOrderBook.MarketDetails memory marketDetails = orderBook.getMarketDetails(marketId);
 		vm.expectRevert("only owner can withdraw funds");
-		Bank(marketDetails.bankAddress).withdrawTo(user1, address(0), 1e18);
+		Bank(marketDetails.bankAddress).withdrawTo(user1, address(0), 1e18, true);
 	}
 
 	function testCreateMarketTwiceAndFail() public {
@@ -2012,7 +2012,7 @@ contract MatchingOrderBookTest is Test {
 	function testBankZeroAmountReverts() public {
 		Bank bank = new Bank(address(this));
 		vm.expectRevert("amount is zero");
-		bank.withdrawTo(user1, address(USDC), 0);
+		bank.withdrawTo(user1, address(USDC), 0, true);
 	}
 
 	// Taker re-enters createMarket from the token callback. The guard rejects it, the payout is parked,
