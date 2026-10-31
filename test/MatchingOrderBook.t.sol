@@ -22,6 +22,8 @@ contract MatchingOrderBookTest is Test {
 	address user3 = address(0x4);
 	address burnAddress = address(0x6);
 	address referrer = address(0x7);
+	// Not a precompile. Native fees from the matching engine are paid with .transfer's 2300 gas stipend, and the
+	// precompile at 0x8 (bn256 pairing) needs 45k gas, so native fee payouts to it would always be parked.
 	address protocolFeeReceiver = address(0x18);
 
 	// copies of the order book events so tests can check them with vm.expectEmit
@@ -3251,6 +3253,131 @@ contract MatchingOrderBookTest is Test {
 		assertEq(ethUser2.balance, 10 ether);
 	}
 
+	// ETH / USDC: 10 asks of 0.1 ETH at 2001..2010 USDC, then hinted asks that each deposit ETH with msg.value
+	function testNativeBaseSellOrderWithHint() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		uint128[] memory ids = new uint128[](11);
+		for (uint i = 1; i <= 10; i++) {
+			vm.prank(ethUser1);
+			ids[i] = orderBook.placeOrder{value: 0.1e18}(marketId, SELL, 0.1e18, 2000e6 + i * 1e6);
+		}
+		assertEq(bank.balance, 1e18);
+
+		// 2005.5 with a hint at the 2005 order goes between 2005 and 2006, and its ETH goes to the bank
+		vm.prank(ethUser1);
+		uint128 a = orderBook.placeOrderWithHint{value: 0.1e18}(marketId, SELL, 0.1e18, 2005.5e6, ids[5]);
+		assertEq(orderBook.getOrder(marketId, SELL, a).previousOrderId, ids[5]);
+		assertEq(orderBook.getOrder(marketId, SELL, a).nextOrderId, ids[6]);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[5]).nextOrderId, a);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[6]).previousOrderId, a);
+		assertEq(bank.balance, 1.1e18);
+
+		// same price as the hint goes behind it, keeping first come first served
+		vm.prank(ethUser1);
+		uint128 b = orderBook.placeOrderWithHint{value: 0.1e18}(marketId, SELL, 0.1e18, 2003e6, ids[3]);
+		assertEq(orderBook.getOrder(marketId, SELL, b).previousOrderId, ids[3]);
+		assertEq(orderBook.getOrder(marketId, SELL, b).nextOrderId, ids[4]);
+
+		// a hint earlier in the book walks forward to the right spot
+		vm.prank(ethUser1);
+		uint128 c = orderBook.placeOrderWithHint{value: 0.1e18}(marketId, SELL, 0.1e18, 2008.5e6, ids[2]);
+		assertEq(orderBook.getOrder(marketId, SELL, c).previousOrderId, ids[8]);
+		assertEq(orderBook.getOrder(marketId, SELL, c).nextOrderId, ids[9]);
+		assertEq(bank.balance, 1.3e18);
+		assertEq(ethUser1.balance, 10 ether - 1.3e18);
+
+		// a hint that is too far back reverts, and the ETH stays with the sender
+		vm.prank(ethUser1);
+		vm.expectRevert("hint order is too far back in book");
+		orderBook.placeOrderWithHint{value: 0.1e18}(marketId, SELL, 0.1e18, 2004e6, ids[9]);
+
+		// a hint that doesn't exist reverts
+		vm.prank(ethUser1);
+		vm.expectRevert("hint order does not exist");
+		orderBook.placeOrderWithHint{value: 0.1e18}(marketId, SELL, 0.1e18, 2004e6, 999);
+
+		// the wrong msg.value is rejected even with a good hint
+		vm.prank(ethUser1);
+		vm.expectRevert("improper amount of native token sent");
+		orderBook.placeOrderWithHint{value: 0.1e18 - 1}(marketId, SELL, 0.1e18, 2004e6, ids[3]);
+		assertEq(bank.balance, 1.3e18);
+		assertEq(ethUser1.balance, 10 ether - 1.3e18);
+
+		// cancelling a hinted order refunds its ETH and relinks its neighbours
+		vm.prank(ethUser1);
+		orderBook.cancelOrder(marketId, SELL, a);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[5]).nextOrderId, ids[6]);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[6]).previousOrderId, ids[5]);
+		assertEq(bank.balance, 1.2e18);
+		assertEq(ethUser1.balance, 10 ether - 1.2e18);
+	}
+
+	// USDC / ETH: 10 bids of 10 USDC at 0.0001..0.001 ETH each (best bid at the head), then hinted bids that
+	// each deposit ETH with msg.value. A hinted bid that fully fills never reaches the hint check.
+	function testNativeQuoteBuyOrderWithHint() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeQuoteMarket();
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		uint128[] memory ids = new uint128[](11);
+		for (uint i = 1; i <= 10; i++) {
+			// 10 USDC at i * 0.0001 ETH costs i * 0.001 ETH
+			vm.prank(ethUser2);
+			ids[i] = orderBook.placeOrder{value: i * 1e15}(marketId, BUY, 10e6, i * 1e14);
+		}
+		assertEq(orderBook.getFirstOrderId(marketId, BUY), ids[10]);
+		assertEq(bank.balance, 55e15);
+
+		// 0.00055 with a hint at the 0.0006 order goes between 0.0006 and 0.0005
+		vm.prank(ethUser2);
+		uint128 a = orderBook.placeOrderWithHint{value: 5.5e15}(marketId, BUY, 10e6, 5.5e14, ids[6]);
+		assertEq(orderBook.getOrder(marketId, BUY, a).previousOrderId, ids[6]);
+		assertEq(orderBook.getOrder(marketId, BUY, a).nextOrderId, ids[5]);
+		assertEq(orderBook.getOrder(marketId, BUY, ids[6]).nextOrderId, a);
+		assertEq(orderBook.getOrder(marketId, BUY, ids[5]).previousOrderId, a);
+
+		// a hint earlier in the book walks forward to the right spot
+		vm.prank(ethUser2);
+		uint128 b = orderBook.placeOrderWithHint{value: 2.5e15}(marketId, BUY, 10e6, 2.5e14, ids[9]);
+		assertEq(orderBook.getOrder(marketId, BUY, b).previousOrderId, ids[3]);
+		assertEq(orderBook.getOrder(marketId, BUY, b).nextOrderId, ids[2]);
+		assertEq(bank.balance, 63e15);
+
+		// a hint that is too far back reverts, and the ETH stays with the sender
+		vm.prank(ethUser2);
+		vm.expectRevert("hint order is too far back in book");
+		orderBook.placeOrderWithHint{value: 7e15}(marketId, BUY, 10e6, 7e14, ids[5]);
+		assertEq(ethUser2.balance, 10 ether - 63e15);
+
+		// An ask above the best bid, then a hinted bid at a higher price that fully fills against it. No hint
+		// can be valid for a bid above every resting bid, but a full fill returns before the hint is checked.
+		// The bid pays the ask's price and the unused ETH is refunded.
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder(marketId, SELL, 5e6, 1.1e15);
+		vm.prank(ethUser2);
+		uint128 filled = orderBook.placeOrderWithHint{value: 6e15}(marketId, BUY, 5e6, 1.2e15, ids[10], ethReferrer);
+		assertEq(filled, 0, "taker fully filled, nothing posted");
+		assertEq(orderBook.getOrder(marketId, SELL, askId).baseQuantity, 0);
+		assertEq(ethUser2.balance, 10 ether - 63e15 - 5.5e15, "only the fill price is spent");
+		assertEq(ethUser1.balance, 10 ether + 5.5e15, "maker receives the ETH");
+		assertEq(USDC.balanceOf(ethUser2), 10000e6 + 5e6 - 0.005e6, "taker gets USDC minus 0.1% fee");
+		assertEq(USDC.balanceOf(ethReferrer), 0.0025e6);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 0.0025e6);
+		assertEq(bank.balance, 63e15);
+
+		// The same bid for 10 USDC only half fills. Its leftover does reach the hint check, where the hint is too
+		// far back, so the whole order reverts: the ask is untouched and no ETH moves.
+		vm.prank(ethUser1);
+		uint128 secondAskId = orderBook.placeOrder(marketId, SELL, 5e6, 1.1e15);
+		vm.prank(ethUser2);
+		vm.expectRevert("hint order is too far back in book");
+		orderBook.placeOrderWithHint{value: 12e15}(marketId, BUY, 10e6, 1.2e15, ids[10], ethReferrer);
+		assertEq(orderBook.getOrder(marketId, SELL, secondAskId).baseQuantity, 5e6);
+		assertEq(ethUser2.balance, 10 ether - 63e15 - 5.5e15);
+		assertEq(ethUser1.balance, 10 ether + 5.5e15);
+		assertEq(bank.balance, 63e15);
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Re-entrancy through native token payouts. Bank.withdrawTo sends native token with a raw call,
 	// so a contract recipient gets control in receive(). Fee-free ETH / USDC market so payouts are exact.
@@ -3372,10 +3499,11 @@ contract MatchingOrderBookTest is Test {
 		assertEq(bank.balance, 1e18, "second ask's ETH is still escrowed");
 	}
 
-	// The attacker wraps the reentry in try/catch, but in the matching loop receive() only gets the 2300 gas
-	// stipend. It runs out of gas before the call is made (running out of gas can't be caught), so the payout
-	// is parked and the reentry has no effect.
-	function testNativeReentrySwallowedIsBlockedAndPaymentDelivered() public {
+	// An attacker that wraps the reentry in try/catch. In the matching engine the payout only gets the 2300 gas
+	// stipend, so receive() runs out of gas before the call can be made (running out of gas can't be caught)
+	// and the payout is parked. withdrawFailedPayment pays with unlimited gas, so there the reentry does reach
+	// the guard, the attacker swallows the revert, and the withdraw is delivered with nothing else changing.
+	function testNativeReentrySwallowedStillParksPayment() public {
 		(bytes32 marketId, address payable bank, ReentrantNativeReceiver attacker) = _setUpNativeReentryMarket();
 		vm.prank(ethUser1);
 		orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
@@ -3383,17 +3511,27 @@ contract MatchingOrderBookTest is Test {
 		uint128 counterBefore = orderBook.orderCounter();
 
 		attacker.setAttack(ReentrantNativeReceiver.Attack.SWALLOWED_PLACE_ORDER);
+		vm.expectEmit(true, true, true, true);
+		emit PaymentFailed(address(attacker), bank, address(0), 1e18);
 		attacker.placeOrder(MatchingOrderBook.Side.BUY, 1e18, 2000e6);
 
-		// re-entry never hits the guard because the transfer gas limit inside the matching loop is 2300
+		// the reentry never ran, the maker was paid, and the attacker's ETH is parked
 		assertEq(attacker.blockedReentries(), 0, "reentry never reached the guard");
 		assertEq(orderBook.orderCounter(), counterBefore);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
-		// the maker is paid, the attacker's ETH is parked in the bank
 		assertEq(address(attacker).balance, 0);
 		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6);
 		assertEq(bank.balance, 1e18);
 		assertEq(USDC.balanceOf(bank), 0);
 		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+
+		// withdrawing with the attack still on: the reentry hits the guard, is swallowed, and the ETH arrives
+		attacker.withdrawFailedPayment();
+		assertEq(attacker.blockedReentries(), 1, "reentry hit the guard");
+		assertEq(orderBook.orderCounter(), counterBefore);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+		assertEq(address(attacker).balance, 1e18);
+		assertEq(bank.balance, 0);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
 	}
 }
