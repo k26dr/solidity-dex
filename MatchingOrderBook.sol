@@ -26,7 +26,7 @@ contract Bank {
 		require(msg.sender == owner, "only owner can withdraw funds");
 		require(amount > 0, "amount is zero");
 		if (token == address(0)) {
-			(bool sent,) = user.call{value: amount, gas: 100e3}("");
+			(bool sent,) = user.call{value: amount}("");
 			require(sent, "native token send to user failed");
 		}
 		else {
