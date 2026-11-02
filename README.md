@@ -75,7 +75,7 @@ withdrawFailedPayment(address payable bankAddress, address token)
 failedPaymentBalance(address user, address bank, address token) external view returns (uint)
 ```
 
-### Structs
+### Return Structs
 
 Many view functions return Order structs. Here's the format of the Order struct.
 
