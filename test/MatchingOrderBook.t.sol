@@ -1936,6 +1936,68 @@ contract MatchingOrderBookTest is Test {
 		assertEq(USDC.balanceOf(user1), 10000e6);
 	}
 
+	// Market minimums of 10 EURT and 20 USDC apply to every order, maker or taker, buy or sell.
+	// An order exactly at both minimums is allowed, one unit under either is rejected, and a partial fill
+	// that leaves a maker under the minimum refunds the rest
+	function testBaseAndQuoteMinimums() public {
+		bytes32 marketId = orderBook.createMarket(address(EURT), address(USDC), 10e6, 20e6, 0, 1);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		EURT.mint(user2, 100e6);
+		USDC.mint(user3, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), type(uint).max);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), type(uint).max);
+
+		// one unit under the base minimum, on both sides (the quote value is well above its minimum)
+		vm.prank(user2);
+		vm.expectRevert("base quantity is below minimum");
+		orderBook.placeOrder(marketId, SELL, 10e6 - 1, 5e6);
+		vm.prank(user3);
+		vm.expectRevert("base quantity is below minimum");
+		orderBook.placeOrder(marketId, BUY, 10e6 - 1, 5e6);
+
+		// at the base minimum but one unit under the quote minimum, on both sides
+		vm.prank(user2);
+		vm.expectRevert("calculated quote quantity is below minimum");
+		orderBook.placeOrder(marketId, SELL, 10e6, 2e6 - 1);
+		vm.prank(user3);
+		vm.expectRevert("calculated quote quantity is below minimum");
+		orderBook.placeOrder(marketId, BUY, 10e6, 2e6 - 1);
+
+		// nothing moved
+		assertEq(EURT.balanceOf(user2), 100e6);
+		assertEq(USDC.balanceOf(user3), 100e6);
+		assertEq(orderBook.orderCounter(), 0);
+
+		// exactly at both minimums: 10 EURT at 2 USDC is worth exactly 20 USDC, and it posts
+		vm.prank(user2);
+		uint128 askId = orderBook.placeOrder(marketId, SELL, 10e6, 2e6);
+		assertEq(orderBook.getOrder(marketId, SELL, askId).baseQuantity, 10e6);
+
+		// a taker buy exactly at both minimums fills it
+		vm.prank(user3);
+		assertEq(orderBook.placeOrder(marketId, BUY, 10e6, 2e6), 0, "fully filled, nothing posted");
+		assertEq(orderBook.getFirstOrderId(marketId, SELL), 0);
+		assertEq(EURT.balanceOf(user3), 10e6);
+		assertEq(USDC.balanceOf(user2), 20e6);
+
+		// a 15 EURT ask filled for the minimum 10 leaves 5, under the base minimum, so the 5 is refunded
+		vm.prank(user2);
+		uint128 bigAskId = orderBook.placeOrder(marketId, SELL, 15e6, 2e6);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, BUY, 10e6, 2e6);
+		assertEq(orderBook.getOrder(marketId, SELL, bigAskId).baseQuantity, 0, "remainder removed from the book");
+		assertEq(orderBook.getFirstOrderId(marketId, SELL), 0);
+		assertEq(EURT.balanceOf(user2), 100e6 - 10e6 - 10e6, "the unfilled 5 EURT came back");
+		assertEq(EURT.balanceOf(user3), 20e6);
+		assertEq(USDC.balanceOf(user2), 40e6);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
 	function testZeroQuantityOrPriceReverts() public {
 		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 0, 1);
