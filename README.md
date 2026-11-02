@@ -32,7 +32,9 @@ There is a frontend that goes with these smart contracts at [https://github.com/
 // partially filled orders that go below those thresholds are evicted from the book and the remaining amounts are refunded to the maker
 // feeNumerator and feeDenominator are both for taker fees. maker fees are always 0. 
 createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) returns (bytes32 marketId)
+```
 
+```
 // For markets with no fee, or if you would like to see the market fee burned, you can place orders without a referrer
 placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external payable returns (uint128 orderId) 
 
@@ -51,11 +53,17 @@ placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, u
 // you can set this to false as a convenience so that if the hint order gets filled, your order runs as a normal insert
 // referrer gets (100 - protocolFeePercent)% of any taker fee for the market
 placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint, address referrer) public payable returns (uint128 orderId)
+```
 
+```
 cancelOrder(bytes32 marketId, Side side, uint128 orderId) 
+```
 
+```
 withdrawFailedPayment(address payable bankAddress, address token) 
+```
 
+```
 // View Functions
 getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) public pure returns (bytes32)
 
