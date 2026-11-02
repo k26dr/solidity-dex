@@ -618,6 +618,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orders[0].previousOrderId, 0);
 		assertEq(orders[0].nextOrderId, 0);
 		assertEq(orders[1].baseQuantity, 0);
+		vm.expectRevert("calculated quote quantity is below minimum");
 		vm.prank(user2);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 500e6, 1e6);
 	}
@@ -1844,7 +1845,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(USDC.balanceOf(bank), 0);
 
 		// a single unit still can't be bought on its own because the quote rounds to 0
-		vm.expectRevert("calculated quote quantity is zero");
+		vm.expectRevert("calculated quote quantity is below minimum");
 		vm.prank(user3);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1, 0.5e6);
 
@@ -1929,7 +1930,7 @@ contract MatchingOrderBookTest is Test {
 	function testImmediateOrCancelNoFillReverts() public {
 		orderBook.createMarket(address(EURT), address(USDC), 1, 10e6, 0, 1);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 10e6, 0, 1);
-		vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
+		vm.expectRevert("calculated quote quantity is below minimum");
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 5e6, 1e6);
 		assertEq(USDC.balanceOf(user1), 10000e6);
@@ -1938,10 +1939,10 @@ contract MatchingOrderBookTest is Test {
 	function testZeroQuantityOrPriceReverts() public {
 		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 0, 1);
-		vm.expectRevert("zero quantity/price orders not permitted");
+		vm.expectRevert("base quantity is below minimum");
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 0, 1e6);
-		vm.expectRevert("zero quantity/price orders not permitted");
+		vm.expectRevert("zero price orders not permitted");
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 1e6, 0);
 	}
