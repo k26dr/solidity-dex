@@ -2359,7 +2359,7 @@ contract MatchingOrderBookTest is Test {
 
 		// 15.5 with a hint at the 15 order goes between 15 and 16
 		vm.prank(user2);
-		uint128 a = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 15.5e6, ids[15], true, address(0));
+		uint128 a = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 15.5e6, ids[15], true);
 		assertEq(orderBook.getOrder(marketId, SELL, a).previousOrderId, ids[15]);
 		assertEq(orderBook.getOrder(marketId, SELL, a).nextOrderId, ids[16]);
 		assertEq(orderBook.getOrder(marketId, SELL, ids[15]).nextOrderId, a);
@@ -2367,31 +2367,31 @@ contract MatchingOrderBookTest is Test {
 
 		// same price as the hint goes behind it, keeping first come first served
 		vm.prank(user2);
-		uint128 b = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 10e6, ids[10], true, address(0));
+		uint128 b = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 10e6, ids[10], true);
 		assertEq(orderBook.getOrder(marketId, SELL, b).previousOrderId, ids[10]);
 		assertEq(orderBook.getOrder(marketId, SELL, b).nextOrderId, ids[11]);
 
 		// a hint earlier in the book walks forward to the right spot
 		vm.prank(user2);
-		uint128 c = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 18.5e6, ids[3], true, address(0));
+		uint128 c = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 18.5e6, ids[3], true);
 		assertEq(orderBook.getOrder(marketId, SELL, c).previousOrderId, ids[18]);
 		assertEq(orderBook.getOrder(marketId, SELL, c).nextOrderId, ids[19]);
 
 		// the back of the book with a hint at the last order
 		vm.prank(user2);
-		uint128 d = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 25e6, ids[20], true, address(0));
+		uint128 d = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 25e6, ids[20], true);
 		assertEq(orderBook.getOrder(marketId, SELL, d).previousOrderId, ids[20]);
 		assertEq(orderBook.getOrder(marketId, SELL, d).nextOrderId, 0);
 
 		// a hint that is too far back
 		vm.expectRevert("hint order is too far back in book");
 		vm.prank(user2);
-		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 15e6, ids[20], true, address(0));
+		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 15e6, ids[20], true);
 
 		// a hint that doesn't exist reverts
 		vm.expectRevert("hint order does not exist");
 		vm.prank(user2);
-		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 5e6, 999, true, address(0));
+		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 5e6, 999, true);
 	}
 
 	// 20 buys at prices 1..20 (best bid 20 at the head), then insert with hints deep in the book
@@ -2412,7 +2412,7 @@ contract MatchingOrderBookTest is Test {
 
 		// 5.5 with a hint at the 6 order goes between 6 and 5
 		vm.prank(user3);
-		uint128 a = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 5.5e6, ids[6], true, address(0));
+		uint128 a = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 5.5e6, ids[6], true);
 		assertEq(orderBook.getOrder(marketId, BUY, a).previousOrderId, ids[6]);
 		assertEq(orderBook.getOrder(marketId, BUY, a).nextOrderId, ids[5]);
 		assertEq(orderBook.getOrder(marketId, BUY, ids[6]).nextOrderId, a);
@@ -2420,34 +2420,34 @@ contract MatchingOrderBookTest is Test {
 
 		// same price as the hint goes behind it, keeping first come first served
 		vm.prank(user3);
-		uint128 b = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 10e6, ids[10], true, address(0));
+		uint128 b = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 10e6, ids[10], true);
 		assertEq(orderBook.getOrder(marketId, BUY, b).previousOrderId, ids[10]);
 		assertEq(orderBook.getOrder(marketId, BUY, b).nextOrderId, ids[9]);
 
 		// a hint earlier in the book walks forward to the right spot
 		vm.prank(user3);
-		uint128 c = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 2.5e6, ids[18], true, address(0));
+		uint128 c = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 2.5e6, ids[18], true);
 		assertEq(orderBook.getOrder(marketId, BUY, c).previousOrderId, ids[3]);
 		assertEq(orderBook.getOrder(marketId, BUY, c).nextOrderId, ids[2]);
 
 		// the back of the book with a hint at the last order
 		vm.prank(user3);
-		uint128 d = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 0.5e6, ids[1], true, address(0));
+		uint128 d = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 0.5e6, ids[1], true);
 		assertEq(orderBook.getOrder(marketId, BUY, d).previousOrderId, ids[1]);
 		assertEq(orderBook.getOrder(marketId, BUY, d).nextOrderId, 0);
 
 		// a hint past where the order belongs reverts instead of misplacing it
 		vm.expectRevert("hint order is too far back in book");
 		vm.prank(user3);
-		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 15e6, ids[14], true, address(0));
+		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 15e6, ids[14], true);
 		vm.expectRevert("hint order is too far back in book");
 		vm.prank(user3);
-		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 15e6, ids[5], true, address(0));
+		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 15e6, ids[5], true);
 
 		// a hint that doesn't exist reverts
 		vm.expectRevert("hint order does not exist");
 		vm.prank(user3);
-		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 5e6, 999, true, address(0));
+		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 5e6, 999, true);
 	}
 
 	// revertOnBadHint = false: a hint that is missing, filled, cancelled, from the other side of the book or too
@@ -2472,13 +2472,13 @@ contract MatchingOrderBookTest is Test {
 
 		// a hint that doesn't exist
 		vm.prank(user2);
-		uint128 a = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 5.5e6, 999, false, address(0));
+		uint128 a = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 5.5e6, 999, false);
 		assertEq(orderBook.getOrder(marketId, SELL, a).previousOrderId, ids[5]);
 		assertEq(orderBook.getOrder(marketId, SELL, a).nextOrderId, ids[6]);
 
 		// a hint that is too far back
 		vm.prank(user2);
-		uint128 b = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 3.5e6, ids[9], false, address(0));
+		uint128 b = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 3.5e6, ids[9], false);
 		assertEq(orderBook.getOrder(marketId, SELL, b).previousOrderId, ids[3]);
 		assertEq(orderBook.getOrder(marketId, SELL, b).nextOrderId, ids[4]);
 
@@ -2488,9 +2488,9 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, SELL, ids[1]).baseQuantity, 0);
 		vm.prank(user2);
 		vm.expectRevert("hint order does not exist");
-		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 1.5e6, ids[1], true, address(0));
+		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 1.5e6, ids[1], true);
 		vm.prank(user2);
-		uint128 c = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 1.5e6, ids[1], false, address(0));
+		uint128 c = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 1.5e6, ids[1], false);
 		assertEq(orderBook.getFirstOrderId(marketId, SELL), c, "new best ask");
 		assertEq(orderBook.getOrder(marketId, SELL, c).previousOrderId, 0);
 		assertEq(orderBook.getOrder(marketId, SELL, c).nextOrderId, ids[2]);
@@ -2500,7 +2500,7 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user2);
 		orderBook.cancelOrder(marketId, SELL, ids[7]);
 		vm.prank(user2);
-		uint128 d = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 7e6, ids[7], false, address(0));
+		uint128 d = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 7e6, ids[7], false);
 		assertEq(orderBook.getOrder(marketId, SELL, d).previousOrderId, ids[6]);
 		assertEq(orderBook.getOrder(marketId, SELL, d).nextOrderId, ids[8]);
 
@@ -2508,13 +2508,13 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		uint128 bidId = orderBook.placeOrder(marketId, BUY, 10e6, 0.5e6);
 		vm.prank(user2);
-		uint128 e = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 8.5e6, bidId, false, address(0));
+		uint128 e = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 8.5e6, bidId, false);
 		assertEq(orderBook.getOrder(marketId, SELL, e).previousOrderId, ids[8]);
 		assertEq(orderBook.getOrder(marketId, SELL, e).nextOrderId, ids[9]);
 
 		// a good hint is used exactly as with revertOnBadHint = true
 		vm.prank(user2);
-		uint128 f = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 9.5e6, ids[9], false, address(0));
+		uint128 f = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 9.5e6, ids[9], false);
 		assertEq(orderBook.getOrder(marketId, SELL, f).previousOrderId, ids[9]);
 		assertEq(orderBook.getOrder(marketId, SELL, f).nextOrderId, ids[10]);
 	}
@@ -2540,13 +2540,13 @@ contract MatchingOrderBookTest is Test {
 
 		// a hint that is too far back (a bid hint priced below the new bid)
 		vm.prank(user3);
-		uint128 a = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 7.5e6, ids[3], false, address(0));
+		uint128 a = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 7.5e6, ids[3], false);
 		assertEq(orderBook.getOrder(marketId, BUY, a).previousOrderId, ids[8]);
 		assertEq(orderBook.getOrder(marketId, BUY, a).nextOrderId, ids[7]);
 
 		// a hint that doesn't exist
 		vm.prank(user3);
-		uint128 b = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 4.5e6, 999, false, address(0));
+		uint128 b = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 4.5e6, 999, false);
 		assertEq(orderBook.getOrder(marketId, BUY, b).previousOrderId, ids[5]);
 		assertEq(orderBook.getOrder(marketId, BUY, b).nextOrderId, ids[4]);
 
@@ -2555,7 +2555,7 @@ contract MatchingOrderBookTest is Test {
 		orderBook.placeOrder(marketId, SELL, 10e6, 10e6);
 		assertEq(orderBook.getOrder(marketId, BUY, ids[10]).baseQuantity, 0);
 		vm.prank(user3);
-		uint128 c = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 10.5e6, ids[10], false, address(0));
+		uint128 c = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 10.5e6, ids[10], false);
 		assertEq(orderBook.getFirstOrderId(marketId, BUY), c, "new best bid");
 		assertEq(orderBook.getOrder(marketId, BUY, c).previousOrderId, 0);
 		assertEq(orderBook.getOrder(marketId, BUY, c).nextOrderId, ids[9]);
@@ -2564,7 +2564,7 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		orderBook.cancelOrder(marketId, BUY, ids[2]);
 		vm.prank(user3);
-		uint128 d = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 2e6, ids[2], false, address(0));
+		uint128 d = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 2e6, ids[2], false);
 		assertEq(orderBook.getOrder(marketId, BUY, d).previousOrderId, ids[3]);
 		assertEq(orderBook.getOrder(marketId, BUY, d).nextOrderId, ids[1]);
 	}
