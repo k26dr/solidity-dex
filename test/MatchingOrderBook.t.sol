@@ -1936,11 +1936,11 @@ contract MatchingOrderBookTest is Test {
 		assertEq(USDC.balanceOf(user1), 10000e6);
 	}
 
-	// Market minimums of 10 EURT and 20 USDC apply to every order, maker or taker, buy or sell.
-	// An order exactly at both minimums is allowed, one unit under either is rejected, and a partial fill
-	// that leaves a maker under the minimum refunds the rest
+	// A market with order minimums of 2 EURT and 4 USDC and post minimums of 10 EURT and 20 USDC.
+	// Every order, maker or taker, must meet the order minimums. Only what rests in the book must meet the post
+	// minimums: an order between the two can fill, but anything it leaves behind under the post minimums is refunded.
 	function testBaseAndQuoteMinimums() public {
-		bytes32 marketId = orderBook.createMarket(address(EURT), address(USDC), 10e6, 20e6, 10e6, 20e6, 0, 1);
+		bytes32 marketId = orderBook.createMarket(address(EURT), address(USDC), 10e6, 20e6, 2e6, 4e6, 0, 1);
 		address bank = orderBook.getMarketDetails(marketId).bankAddress;
 		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
 		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
@@ -1951,49 +1951,69 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		USDC.approve(address(orderBook), type(uint).max);
 
-		// one unit under the base minimum, on both sides (the quote value is well above its minimum)
+		// one unit under the base order minimum, on both sides (the quote value is well above its minimum)
 		vm.prank(user2);
 		vm.expectRevert("base quantity is below minimum");
-		orderBook.placeOrder(marketId, SELL, 10e6 - 1, 5e6);
+		orderBook.placeOrder(marketId, SELL, 2e6 - 1, 5e6);
 		vm.prank(user3);
 		vm.expectRevert("base quantity is below minimum");
-		orderBook.placeOrder(marketId, BUY, 10e6 - 1, 5e6);
+		orderBook.placeOrder(marketId, BUY, 2e6 - 1, 5e6);
 
-		// at the base minimum but one unit under the quote minimum, on both sides
+		// at the base order minimum but one unit under the quote order minimum, on both sides
 		vm.prank(user2);
 		vm.expectRevert("calculated quote quantity is below minimum");
-		orderBook.placeOrder(marketId, SELL, 10e6, 2e6 - 1);
+		orderBook.placeOrder(marketId, SELL, 2e6, 2e6 - 1);
 		vm.prank(user3);
 		vm.expectRevert("calculated quote quantity is below minimum");
-		orderBook.placeOrder(marketId, BUY, 10e6, 2e6 - 1);
+		orderBook.placeOrder(marketId, BUY, 2e6, 2e6 - 1);
+
+		// above the order minimums but under the post minimums, with nothing to fill against: too small to rest
+		vm.prank(user2);
+		vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
+		orderBook.placeOrder(marketId, SELL, 5e6, 2e6);
+		vm.prank(user3);
+		vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
+		orderBook.placeOrder(marketId, BUY, 5e6, 2e6);
 
 		// nothing moved
 		assertEq(EURT.balanceOf(user2), 100e6);
 		assertEq(USDC.balanceOf(user3), 100e6);
 		assertEq(orderBook.orderCounter(), 0);
 
-		// exactly at both minimums: 10 EURT at 2 USDC is worth exactly 20 USDC, and it posts
+		// exactly at both post minimums: 10 EURT at 2 USDC is worth exactly 20 USDC, and it posts
 		vm.prank(user2);
 		uint128 askId = orderBook.placeOrder(marketId, SELL, 10e6, 2e6);
 		assertEq(orderBook.getOrder(marketId, SELL, askId).baseQuantity, 10e6);
 
-		// a taker buy exactly at both minimums fills it
+		// a taker buy exactly at both order minimums (2 EURT for 4 USDC) fills against it. That leaves 8 EURT,
+		// under the base post minimum, so the 8 is refunded to the maker and the ask leaves the book
 		vm.prank(user3);
-		assertEq(orderBook.placeOrder(marketId, BUY, 10e6, 2e6), 0, "fully filled, nothing posted");
+		assertEq(orderBook.placeOrder(marketId, BUY, 2e6, 2e6), 0, "fully filled, nothing posted");
+		assertEq(orderBook.getOrder(marketId, SELL, askId).baseQuantity, 0, "remainder removed from the book");
 		assertEq(orderBook.getFirstOrderId(marketId, SELL), 0);
-		assertEq(EURT.balanceOf(user3), 10e6);
-		assertEq(USDC.balanceOf(user2), 20e6);
+		assertEq(EURT.balanceOf(user3), 2e6);
+		assertEq(USDC.balanceOf(user2), 4e6);
+		assertEq(EURT.balanceOf(user2), 100e6 - 2e6, "the unfilled 8 EURT came back");
 
-		// a 15 EURT ask filled for the minimum 10 leaves 5, under the base minimum, so the 5 is refunded
+		// a taker buy for 15 EURT fills a 10 EURT ask. The 5 left over is under the base post minimum,
+		// so it doesn't rest in the book and the unused 10 USDC is refunded
 		vm.prank(user2);
-		uint128 bigAskId = orderBook.placeOrder(marketId, SELL, 15e6, 2e6);
+		orderBook.placeOrder(marketId, SELL, 10e6, 2e6);
 		vm.prank(user3);
-		orderBook.placeOrder(marketId, BUY, 10e6, 2e6);
-		assertEq(orderBook.getOrder(marketId, SELL, bigAskId).baseQuantity, 0, "remainder removed from the book");
+		assertEq(orderBook.placeOrder(marketId, BUY, 15e6, 2e6), 0, "leftover not posted");
 		assertEq(orderBook.getFirstOrderId(marketId, SELL), 0);
-		assertEq(EURT.balanceOf(user2), 100e6 - 10e6 - 10e6, "the unfilled 5 EURT came back");
-		assertEq(EURT.balanceOf(user3), 20e6);
-		assertEq(USDC.balanceOf(user2), 40e6);
+		assertEq(orderBook.getFirstOrderId(marketId, BUY), 0);
+		assertEq(EURT.balanceOf(user3), 12e6);
+		assertEq(USDC.balanceOf(user3), 100e6 - 4e6 - 20e6, "only the filled 10 EURT were paid for");
+		assertEq(USDC.balanceOf(user2), 24e6);
+
+		// a buy exactly at both post minimums rests in the book
+		vm.prank(user3);
+		uint128 bidId = orderBook.placeOrder(marketId, BUY, 10e6, 2e6);
+		assertEq(orderBook.getOrder(marketId, BUY, bidId).baseQuantity, 10e6);
+		vm.prank(user3);
+		orderBook.cancelOrder(marketId, BUY, bidId);
+
 		assertEq(EURT.balanceOf(bank), 0);
 		assertEq(USDC.balanceOf(bank), 0);
 	}
