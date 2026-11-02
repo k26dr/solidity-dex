@@ -162,6 +162,11 @@ contract MatchingOrderBook {
 		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, true, referrer);
 	}
 
+	// if you want to place an order with a hint and no referrer
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint) public payable returns (uint128 orderId) {
+		return placeOrderWithHint(marketId, side, baseQuantity, price, hintOrderId, revertOnBadHint, address(0));
+	}
+
 	// placeOrder function with hint
 	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
 	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error

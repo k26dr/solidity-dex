@@ -2450,6 +2450,125 @@ contract MatchingOrderBookTest is Test {
 		orderBook.placeOrderWithHint(marketId, BUY, 10e6, 5e6, 999, true, address(0));
 	}
 
+	// revertOnBadHint = false: a hint that is missing, filled, cancelled, from the other side of the book or too
+	// far back falls back to a normal insert from the head of the book instead of reverting
+	function testPlaceOrderWithBadHintFallsBack() public {
+		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 0, 1);
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		EURT.mint(user2, 1000e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), type(uint).max);
+		USDC.mint(user3, 1000e6);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), type(uint).max);
+
+		uint128[] memory ids = new uint128[](11);
+		for (uint i = 1; i <= 10; i++) {
+			vm.prank(user2);
+			ids[i] = orderBook.placeOrder(marketId, SELL, 10e6, i * 1e6);
+		}
+
+		// a hint that doesn't exist
+		vm.prank(user2);
+		uint128 a = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 5.5e6, 999, false, address(0));
+		assertEq(orderBook.getOrder(marketId, SELL, a).previousOrderId, ids[5]);
+		assertEq(orderBook.getOrder(marketId, SELL, a).nextOrderId, ids[6]);
+
+		// a hint that is too far back
+		vm.prank(user2);
+		uint128 b = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 3.5e6, ids[9], false, address(0));
+		assertEq(orderBook.getOrder(marketId, SELL, b).previousOrderId, ids[3]);
+		assertEq(orderBook.getOrder(marketId, SELL, b).nextOrderId, ids[4]);
+
+		// the hint order is filled before this order lands: true reverts, false inserts normally
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, BUY, 10e6, 1e6);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[1]).baseQuantity, 0);
+		vm.prank(user2);
+		vm.expectRevert("hint order does not exist");
+		orderBook.placeOrderWithHint(marketId, SELL, 10e6, 1.5e6, ids[1], true, address(0));
+		vm.prank(user2);
+		uint128 c = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 1.5e6, ids[1], false, address(0));
+		assertEq(orderBook.getFirstOrderId(marketId, SELL), c, "new best ask");
+		assertEq(orderBook.getOrder(marketId, SELL, c).previousOrderId, 0);
+		assertEq(orderBook.getOrder(marketId, SELL, c).nextOrderId, ids[2]);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[2]).previousOrderId, c);
+
+		// the hint order was cancelled
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, SELL, ids[7]);
+		vm.prank(user2);
+		uint128 d = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 7e6, ids[7], false, address(0));
+		assertEq(orderBook.getOrder(marketId, SELL, d).previousOrderId, ids[6]);
+		assertEq(orderBook.getOrder(marketId, SELL, d).nextOrderId, ids[8]);
+
+		// an order id from the other side of the book doesn't exist on this side
+		vm.prank(user3);
+		uint128 bidId = orderBook.placeOrder(marketId, BUY, 10e6, 0.5e6);
+		vm.prank(user2);
+		uint128 e = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 8.5e6, bidId, false, address(0));
+		assertEq(orderBook.getOrder(marketId, SELL, e).previousOrderId, ids[8]);
+		assertEq(orderBook.getOrder(marketId, SELL, e).nextOrderId, ids[9]);
+
+		// a good hint is used exactly as with revertOnBadHint = true
+		vm.prank(user2);
+		uint128 f = orderBook.placeOrderWithHint(marketId, SELL, 10e6, 9.5e6, ids[9], false, address(0));
+		assertEq(orderBook.getOrder(marketId, SELL, f).previousOrderId, ids[9]);
+		assertEq(orderBook.getOrder(marketId, SELL, f).nextOrderId, ids[10]);
+	}
+
+	// revertOnBadHint = false on the buy side (best bid at the head)
+	function testPlaceBuyOrderWithBadHintFallsBack() public {
+		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1);
+		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 0, 1);
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		USDC.mint(user3, 10000e6);
+		vm.prank(user3);
+		USDC.approve(address(orderBook), type(uint).max);
+		EURT.mint(user2, 1000e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), type(uint).max);
+
+		uint128[] memory ids = new uint128[](11);
+		for (uint i = 1; i <= 10; i++) {
+			vm.prank(user3);
+			ids[i] = orderBook.placeOrder(marketId, BUY, 10e6, i * 1e6);
+		}
+
+		// a hint that is too far back (a bid hint priced below the new bid)
+		vm.prank(user3);
+		uint128 a = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 7.5e6, ids[3], false, address(0));
+		assertEq(orderBook.getOrder(marketId, BUY, a).previousOrderId, ids[8]);
+		assertEq(orderBook.getOrder(marketId, BUY, a).nextOrderId, ids[7]);
+
+		// a hint that doesn't exist
+		vm.prank(user3);
+		uint128 b = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 4.5e6, 999, false, address(0));
+		assertEq(orderBook.getOrder(marketId, BUY, b).previousOrderId, ids[5]);
+		assertEq(orderBook.getOrder(marketId, BUY, b).nextOrderId, ids[4]);
+
+		// the hint order is filled before this order lands
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, SELL, 10e6, 10e6);
+		assertEq(orderBook.getOrder(marketId, BUY, ids[10]).baseQuantity, 0);
+		vm.prank(user3);
+		uint128 c = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 10.5e6, ids[10], false, address(0));
+		assertEq(orderBook.getFirstOrderId(marketId, BUY), c, "new best bid");
+		assertEq(orderBook.getOrder(marketId, BUY, c).previousOrderId, 0);
+		assertEq(orderBook.getOrder(marketId, BUY, c).nextOrderId, ids[9]);
+
+		// the hint order was cancelled
+		vm.prank(user3);
+		orderBook.cancelOrder(marketId, BUY, ids[2]);
+		vm.prank(user3);
+		uint128 d = orderBook.placeOrderWithHint(marketId, BUY, 10e6, 2e6, ids[2], false, address(0));
+		assertEq(orderBook.getOrder(marketId, BUY, d).previousOrderId, ids[3]);
+		assertEq(orderBook.getOrder(marketId, BUY, d).nextOrderId, ids[1]);
+	}
+
 	// Seeds 10 sells at 1..10 and 5 buys at 0.1..0.5, then reads slices of the book from different start orders
 	function testGetOrderBookWithStartId() public {
 		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1);
@@ -3376,6 +3495,46 @@ contract MatchingOrderBookTest is Test {
 		assertEq(ethUser2.balance, 10 ether - 63e15 - 5.5e15);
 		assertEq(ethUser1.balance, 10 ether + 5.5e15);
 		assertEq(bank.balance, 63e15);
+	}
+
+	// revertOnBadHint = false with native token deposits: a bad hint falls back to a normal insert, the ETH is
+	// taken exactly once, and a bad hint can't get around the msg.value check
+	function testNativeOrderWithBadHintFallsBack() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		uint128[] memory ids = new uint128[](6);
+		for (uint i = 1; i <= 5; i++) {
+			vm.prank(ethUser1);
+			ids[i] = orderBook.placeOrder{value: 0.1e18}(marketId, SELL, 0.1e18, 2000e6 + i * 1e6);
+		}
+		assertEq(bank.balance, 0.5e18);
+
+		// ids[1] is filled before the hinted order lands
+		vm.prank(ethUser2);
+		orderBook.placeOrder(marketId, BUY, 0.1e18, 2001e6);
+		assertEq(orderBook.getOrder(marketId, SELL, ids[1]).baseQuantity, 0);
+		assertEq(bank.balance, 0.4e18);
+
+		vm.prank(ethUser1);
+		uint128 a = orderBook.placeOrderWithHint{value: 0.1e18}(marketId, SELL, 0.1e18, 2003.5e6, ids[1], false, address(0));
+		assertEq(orderBook.getOrder(marketId, SELL, a).previousOrderId, ids[3]);
+		assertEq(orderBook.getOrder(marketId, SELL, a).nextOrderId, ids[4]);
+
+		// a hint that is too far back
+		vm.prank(ethUser1);
+		uint128 b = orderBook.placeOrderWithHint{value: 0.1e18}(marketId, SELL, 0.1e18, 2002.5e6, ids[5], false, address(0));
+		assertEq(orderBook.getOrder(marketId, SELL, b).previousOrderId, ids[2]);
+		assertEq(orderBook.getOrder(marketId, SELL, b).nextOrderId, ids[3]);
+		assertEq(bank.balance, 0.6e18);
+		assertEq(ethUser1.balance, 10 ether - 0.7e18);
+
+		// the wrong msg.value still reverts with a bad hint and revertOnBadHint = false
+		vm.prank(ethUser1);
+		vm.expectRevert("improper amount of native token sent");
+		orderBook.placeOrderWithHint{value: 0.1e18 - 1}(marketId, SELL, 0.1e18, 2004.5e6, 999, false, address(0));
+		assertEq(bank.balance, 0.6e18);
+		assertEq(ethUser1.balance, 10 ether - 0.7e18);
 	}
 
 	// ---------------------------------------------------------------------------------------------
