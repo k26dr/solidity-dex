@@ -22,4 +22,4 @@ Token recovery in cases where a token contract freezes an address is also suppor
 
 Currently there is an issue with DEX where submitting a specific type of transaction on taker buys can allow you to steal one quote unit at a time. If the gas fee to steal a single unit ever goes below the price of a single quote unit this attack would be profitable. Most tokens have plenty of precision so this is not an issue, but if any token were to have low precision, say a minimum quote unit with a value of greater than $0.0001 (very much in the realm of possibility), this attack could become viable. WBTC is a candidate for something that could be attacked like this. We are working on a fix, and will patch this bug before deploying on mainnet.
 
-A frontend is under development. 
+There is a frontend that goes with these smart contracts at [https://github.com/nitric/zigzag](https://github.com/nitric/zigzag). 
