@@ -58,8 +58,8 @@ contract MatchingOrderBook {
 	struct MarketDetails {
 		address baseToken;
 		address quoteToken;
-		uint baseMinPostSize;
-		uint quoteMinPostSize;
+		uint baseMinimum;
+		uint quoteMinimum;
 		uint feeNumerator;
 		uint feeDenominator;
 		uint baseTokenDecimals;
@@ -182,11 +182,12 @@ contract MatchingOrderBook {
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
 		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), 0, 0);
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
-		require(baseQuantity > 0 && price > 0, "zero quantity/price orders not permitted");
+		require(baseQuantity >= marketDetails.baseMinimum, "base quantity is below minimum");
+		require(price > 0, "zero price orders not permitted");
 		require(referrer != address(this), "cannot use orderbook contract as referrer");
 
 		placeOrderVars.quoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
-		require(placeOrderVars.quoteQuantity > 0, "calculated quote quantity is zero");
+		require(placeOrderVars.quoteQuantity >= marketDetails.quoteMinimum, "calculated quote quantity is below minimum");
 
 		// This is to transfer tokens into the contract
 		// Support is included here for fee-for-transfer tokens which do not send the requested amount exactly.
@@ -294,8 +295,8 @@ contract MatchingOrderBook {
 					placeOrderVars.makerOrderPrice = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].price;
 					placeOrderVars.remainingMakerQuoteQuantity = placeOrderVars.remainingMakerBaseQuantity * placeOrderVars.makerOrderPrice / 
 						10**marketDetails.baseTokenDecimals;
-					if (placeOrderVars.remainingMakerBaseQuantity < marketDetails.baseMinPostSize || 
-					    placeOrderVars.remainingMakerQuoteQuantity < marketDetails.quoteMinPostSize) {
+					if (placeOrderVars.remainingMakerBaseQuantity < marketDetails.baseMinimum || 
+					    placeOrderVars.remainingMakerQuoteQuantity < marketDetails.quoteMinimum) {
 						placeOrderVars.maker = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].user;
 						
 						// delete the order
@@ -334,7 +335,7 @@ contract MatchingOrderBook {
 		// Block scope this to avoid too many local variables
 		{
 			uint postQuoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
-			bool canPost = baseQuantity >= marketDetails.baseMinPostSize && postQuoteQuantity >= marketDetails.quoteMinPostSize;
+			bool canPost = baseQuantity >= marketDetails.baseMinimum && postQuoteQuantity >= marketDetails.quoteMinimum;
 			require(placeOrderVars.fillOccurred || canPost, "order was too small to post. ran as immediate or cancel and failed to fill.");
 
 			// refund orders which filled but can't post
