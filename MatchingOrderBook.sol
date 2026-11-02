@@ -166,11 +166,11 @@ contract MatchingOrderBook {
 	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
 	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
 	// set hintOrderId = 0 if you don't want to include a hint
-	// The recommended behavior for revertOnMissingHint is true to save gas
+	// The recommended behavior for revertOnBadHint is true to save gas
 	// If you want to place hints on orders close to the front of a book (not that you necessarily should, front of the book orders can be run without a hint)
 	// you can set this to false as a convenience so that if the hint order gets filled, your order runs as a normal insert
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnMissingHint, address referrer) public payable returns (uint128 orderId) {
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint, address referrer) public payable returns (uint128 orderId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
@@ -357,11 +357,11 @@ contract MatchingOrderBook {
 
 			// if a hintOrderId is specified, try and start the insertion at that order ID
 			// otherwise start from the beginning of the orderbook
-			// if the hint order is missing, use the revertOnMissingHint argument to decide
+			// if the hint order is missing, use the revertOnBadHint argument to decide
 			// whether to revert or run a normal insertion
 			if (hintOrderId != 0) {
 				if (orders[marketId][side][hintOrderId].baseQuantity == 0) {
-					if (revertOnMissingHint) {
+					if (revertOnBadHint) {
 						revert("hint order does not exist");
 					}
 					else {
@@ -370,7 +370,7 @@ contract MatchingOrderBook {
 				}
 				else if (side == Side.SELL && orders[marketId][side][hintOrderId].price > price ||
 					(side == Side.BUY && orders[marketId][side][hintOrderId].price < price)) {
-					if (revertOnMissingHint) {
+					if (revertOnBadHint) {
 					       revert("hint order is too far back in book");
 					}
 					else {
