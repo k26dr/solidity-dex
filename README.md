@@ -66,7 +66,9 @@ placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, u
 cancelOrder(bytes32 marketId, Side side, uint128 orderId) 
 ```
 
-### For Failed Payments
+### Failed Payments
+
+Payments can fail if a user's address contains some kind of post-payment logic that uses too much gas, or if a token issuer freezes an address. There is an internal process for recovering funds that failed to send properly. Users can only withdraw failed payments into their own address.
 
 ```
 withdrawFailedPayment(address payable bankAddress, address token) 
