@@ -8,7 +8,9 @@ The taker fee is set during market creation. The fee is split between a referrer
 
 It is a full on-chain spot exchange with on-chain matching and risk isolation. The funds for open orders and failed payments for each individual market are held in separate trustless contracts to prevent cross-contamination of risk.
 
-There are minimum post and order sizes on markets that are configurable during market creation. Any orders below the post minimum size are run as immediate or cancel operations. Any unfilled funds are returned to the user. If a maker order is partially filled and the remaining amount is less than the base or quote minimum, the remainder of the maker order is refunded to the maker. Orders below the order minimum size are simply rejected. The order minimum size should be atleast 100,000 or so quote units large to be safe. The quote precision functions as a price tick, and if it's too low, rounding can cause issues.  
+There are minimum post and order sizes on markets that are configurable during market creation. Any orders below the post minimum size are run as immediate or cancel operations. Any unfilled funds are returned to the user. If a maker order is partially filled and the remaining amount is less than the base or quote minimum, the remainder of the maker order is refunded to the maker. 
+
+Orders below the order minimum size are simply rejected. The order minimum size should be atleast 100,000 or so quote units large to be safe. The quote precision functions as a price tick, and if it's too low, rounding can cause issues.  
 
 A single base-quote token pair can have multiple markets with different post and order minimum sizes. This keeps the exchange flexible and allows us to get to a level where spam is no longer an issue. 
 
