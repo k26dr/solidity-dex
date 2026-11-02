@@ -1926,10 +1926,10 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	// Order below the minimum with nothing to fill against runs as fill or kill and reverts
-	function testFillOrKillNoFillReverts() public {
+	function testImmediateOrCancelNoFillReverts() public {
 		orderBook.createMarket(address(EURT), address(USDC), 1, 10e6, 0, 1);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 10e6, 0, 1);
-		vm.expectRevert("order was too small to post. ran as fill or kill and failed to fill.");
+		vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
 		vm.prank(user1);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 5e6, 1e6);
 		assertEq(USDC.balanceOf(user1), 10000e6);
