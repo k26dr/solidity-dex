@@ -20,6 +20,6 @@ To improve order insertion efficiency for orders that go deep in the book, `plac
 
 Token recovery in cases where a token contract freezes an address is also supported using `withdrawFailedPayment`. Example: USDC freezes an address. The funds get parked in the contract in risk isolation mode and can be accessed when the address has been unfrozen.
 
-Currently there is a limit on the DEX where if the gas fee to run an order is less than the quote precision it becomes possible to steal orders. Most tokens have plenty of precision so this is rarely an issue, but we are working on a fix.
+Currently there is an issue with DEX where submitting a specific type of transaction on taker buys can allow you to steal one quote unit at a time. If the gas fee to steal a single unit ever goes below the price of a single quote unit this attack would be profitable. Most tokens have plenty of precision so this is not an issue, but if any token were to have low precision, say a minimum quote unit with a value of greater than $0.0001 (very much in the realm of possibility), this attack could become viable. WBTC is a candidate for something that could be attacked like this. We are working on a fix, and will patch this bug before deploying on mainnet.
 
 A frontend is under development. 
