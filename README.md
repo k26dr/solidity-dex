@@ -30,12 +30,13 @@ There is a frontend that goes with these smart contracts at [https://github.com/
 ### Creating Markets
 
 ```
-// baseMinimum and quoteMinimum are minimum sizes to leave an order on the book
+// basePostMin and quotePostMin are minimum sizes to leave an order on the book
 // sizes below those numbers are run as immediate-or-cancel orders
 // partially filled orders that go below those thresholds are evicted from the book and the remaining amounts are refunded to the maker
+// baseOrderMin and quoteOrderMin are minimum sizes to place an order
 // feeNumerator and feeDenominator are both for taker fees. maker fees are always 0. 
 
-createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) returns (bytes32 marketId)
+createMarket(address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator) returns (bytes32 marketId)
 ```
 
 ### Placing Orders
@@ -103,8 +104,10 @@ struct Order {
 struct MarketDetails {
     address baseToken;
     address quoteToken;
-    uint baseMinPostSize;
-    uint quoteMinPostSize;
+    uint basePostMin;
+    uint quotePostMin;
+    uint baseOrderMin;
+    uint quoteOrderMin;
     uint feeNumerator;
     uint feeDenominator;
     uint baseTokenDecimals;
@@ -115,7 +118,7 @@ struct MarketDetails {
 ### View Functions
 
 ```
-getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) public pure returns (bytes32)
+getMarketId(address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator) public pure returns (bytes32)
 
 getMarketDetails(bytes32 marketId) public view returns (MarketDetails memory)
 
