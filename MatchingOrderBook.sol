@@ -169,7 +169,8 @@ contract MatchingOrderBook {
 
 	// placeOrder function with hint
 	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
-	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
+	// if the placement of the hint order is further in the book than the order should be placed, 
+	// it will either fail with an error if revertOnBadHint is set to true or run as a normal insert if revertOnBadHint is set false
 	// set hintOrderId = 0 if you don't want to include a hint
 	// The recommended behavior for revertOnBadHint is true to save gas
 	// If you want to place hints on orders close to the front of a book (not that you necessarily should, front of the book orders can be run without a hint)
