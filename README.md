@@ -26,6 +26,9 @@ There is a frontend that goes with these smart contracts at [https://github.com/
 
 ## ABI
 
+
+### Creating Markets
+
 ```
 // baseMinimum and quoteMinimum are minimum sizes to leave an order on the book
 // sizes below those numbers are run as immediate-or-cancel orders
@@ -33,6 +36,8 @@ There is a frontend that goes with these smart contracts at [https://github.com/
 // feeNumerator and feeDenominator are both for taker fees. maker fees are always 0. 
 createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) returns (bytes32 marketId)
 ```
+
+### Placing Orders
 
 ```
 // For markets with no fee, or if you would like to see the market fee burned, you can place orders without a referrer
@@ -55,15 +60,49 @@ placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, u
 placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint, address referrer) public payable returns (uint128 orderId)
 ```
 
+### Canceling Orders
+
 ```
 cancelOrder(bytes32 marketId, Side side, uint128 orderId) 
 ```
 
+### For Failed Payments
+
 ```
 withdrawFailedPayment(address payable bankAddress, address token) 
+
+// To view failed payment balances
+failedPaymentBalance(address user, address bank, address token) external view returns (uint)
 ```
 
 ## View Functions
+
+Many view functions return Order structs. Here's the format of the Order struct.
+
+```
+struct Order {
+    address user;
+    uint baseQuantity;
+    uint price;
+    uint128 nextOrderId;
+    uint128 previousOrderId;
+}
+```
+
+`getMarketDetails` returns market information. The return struct is as such:
+
+```
+struct MarketDetails {
+    address baseToken;
+    address quoteToken;
+    uint baseMinPostSize;
+    uint quoteMinPostSize;
+    uint feeNumerator;
+    uint feeDenominator;
+    uint baseTokenDecimals;
+    address payable bankAddress;
+}
+```
 
 ```
 getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) public pure returns (bytes32)
@@ -72,14 +111,14 @@ getMarketDetails(bytes32 marketId) public view returns (MarketDetails memory)
 
 getOrder(bytes32 marketId, Side side, uint128 orderId) external view returns (Order memory)
 
-getFirstOrderId(bytes32 marketId, Side side) external view returns (uint128)
+getFirstOrderId(bytes32 marketId, Side side) external view returns (uint128 orderId)
 
+// same as getOrderBookWithStartId but starting at the front of the book
 getOrderBook(bytes32 marketId, Side side, uint depth) external view returns (Order[] memory)
 
 // get an orderbook starting at a specific order id
 getOrderBookWithStartId(bytes32 marketId, Side side, uint depth, uint128 startOrderId) public view returns (Order[] memory) 
 
-failedPaymentBalance(address user, address bank, address token) external view returns (uint)
 ```
 
 
