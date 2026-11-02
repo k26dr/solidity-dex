@@ -123,7 +123,7 @@ contract NativeMatchingOrderBookHandler is Test {
 	function _submit(PendingOrder memory o) internal {
 		// the ETH or USDC stays with the actor if this reverts, so the conservation invariants still hold
 		vm.prank(o.actor);
-		try orderBook.placeOrderWithHint{value: o.value}(o.marketId, o.side, o.qty, o.price, o.hint, o.referrer) {
+		try orderBook.placeOrderWithHint{value: o.value}(o.marketId, o.side, o.qty, o.price, o.hint, true, o.referrer) {
 			placeCalls++;
 		} catch Error(string memory reason) {
 			// the only allowed revert is a hint past the insertion point

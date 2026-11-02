@@ -375,12 +375,12 @@ contract MatchingOrderBook {
 						hintOrderId = 0; // this will trigger a default insert
 					}
 				}
-				else {
-					nextOrderId = hintOrderId;
-					previousOrderId = orders[marketId][side][nextOrderId].previousOrderId;
-				}
 			} 
-			if (hintOrderId == 0) {
+			if (hintOrderId != 0) { // hint exists and is usable
+				nextOrderId = hintOrderId;
+				previousOrderId = orders[marketId][side][nextOrderId].previousOrderId;
+			}
+			else {
 				nextOrderId = orderbooks[marketId][side];
 				previousOrderId = 0;
 			}
