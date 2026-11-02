@@ -20,6 +20,6 @@ To improve order insertion efficiency for orders that go deep in the book, `plac
 
 Token recovery in cases where a token contract freezes an address is also supported using `withdrawFailedPayment`. Example: USDC freezes an address. The funds get parked in the contract in risk isolation mode and can be accessed when the address has been unfrozen.
 
-Currently there is a limit on the DEX where markets in which the gas fee to run an order is lower than the quote precision makes it possible to steal orders. Most tokens have plenty of precision so this is rarely an issue, but we working on a fix.
+Currently there is a limit on the DEX where if the gas fee to run an order is less than the quote precision it becomes possible to steal orders. Most tokens have plenty of precision so this is rarely an issue, but we are working on a fix.
 
 A frontend is under development. 
