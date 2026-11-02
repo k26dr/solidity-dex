@@ -152,25 +152,23 @@ contract MatchingOrderBook {
 
 	// For markets with no fee, or if you would like to see the market fee burned, you can place orders without a referrer
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external payable returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, address(0));
+		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, true, address(0));
 	}
 
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external payable returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, referrer);
+		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, true, referrer);
 	}
 
 	// placeOrder function with hint
 	// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
 	// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
 	// set hintOrderId = 0 if you don't want to include a hint
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId) public payable returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, hintOrderId, address(0));
-	}
-
+	// The recommended behavior for revertOnMissingHint is true to save gas
+	// If you want to place hints on orders close to the front of a book (not that you necessarily should, front of the book orders can be run without a hint)
+	// you can set this to false as a convenience so that if the hint order gets filled, your order runs as a normal insert
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
-	// set hintOrderId = 0 if you don't want to include a hint
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, address referrer) public payable returns (uint128 orderId) {
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnMissingHint, address referrer) public payable returns (uint128 orderId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
@@ -357,19 +355,37 @@ contract MatchingOrderBook {
 
 			// if a hintOrderId is specified, try and start the insertion at that order ID
 			// otherwise start from the beginning of the orderbook
+			// if the hint order is missing, use the revertOnMissingHint argument to decide
+			// whether to revert or run a normal insertion
 			if (hintOrderId != 0) {
-				require(orders[marketId][side][hintOrderId].baseQuantity != 0, "hint order does not exist");
-				if (side == Side.SELL) {
-					require(orders[marketId][side][hintOrderId].price <= price, "hint order is too far back in book");
-				} else {
-					require(orders[marketId][side][hintOrderId].price >= price, "hint order is too far back in book");
+				if (orders[marketId][side][hintOrderId].baseQuantity == 0) {
+					if (revertOnMissingHint) {
+						revert("hint order does not exist");
+					}
+					else {
+						hintOrderId = 0; // this will trigger a default insert
+					}
 				}
-				nextOrderId = hintOrderId;
-				previousOrderId = orders[marketId][side][nextOrderId].previousOrderId;
-			} else {
+				else if (side == Side.SELL && orders[marketId][side][hintOrderId].price > price ||
+					(side == Side.BUY && orders[marketId][side][hintOrderId].price < price)) {
+					if (revertOnMissingHint) {
+					       revert("hint order is too far back in book");
+					}
+					else {
+						hintOrderId = 0; // this will trigger a default insert
+					}
+				}
+				else {
+					nextOrderId = hintOrderId;
+					previousOrderId = orders[marketId][side][nextOrderId].previousOrderId;
+				}
+			} 
+			if (hintOrderId == 0) {
 				nextOrderId = orderbooks[marketId][side];
 				previousOrderId = 0;
 			}
+
+			// Determine where in the book the order goes then insert it there
 			if (nextOrderId == 0) { //  if the orderbook is empty
 				orderbooks[marketId][side] = orderId;
 			}
