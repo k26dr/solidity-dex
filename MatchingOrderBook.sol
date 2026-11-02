@@ -75,6 +75,8 @@ contract MatchingOrderBook {
 		uint remainingMakerQuoteQuantity;
 		uint makerOrderPrice;
 		address maker;
+		uint fillBaseQuantity;
+		uint fillQuoteQuantity;
 	}
 	mapping(bytes32 => MarketDetails) public MARKET_DETAILS; // market_id -> MarketDetails
 	mapping(bytes32 => mapping(Side => uint128)) orderbooks; // marketId -> Side -> firstOrderId
@@ -172,7 +174,7 @@ contract MatchingOrderBook {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
-		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0));
+		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), 0, 0);
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
 		require(baseQuantity > 0 && price > 0, "zero quantity/price orders not permitted");
 		require(referrer != address(this), "cannot use orderbook contract as referrer");
@@ -243,24 +245,24 @@ contract MatchingOrderBook {
 				}
 
 				placeOrderVars.fillOccurred = true;
-				uint fillBaseQuantity = (baseQuantity > fillOrder.baseQuantity) ? fillOrder.baseQuantity : baseQuantity;
-				uint fillQuoteQuantity = fillBaseQuantity * fillOrder.price / 10**marketDetails.baseTokenDecimals;
-				placeOrderVars.usedQuoteQuantity += fillQuoteQuantity;
-				emit OrderFill(placeOrderVars.fillOrderId, fillOrder.user, msg.sender, marketId, fillBaseQuantity, fillOrder.price, referrer);
+				placeOrderVars.fillBaseQuantity = (baseQuantity > fillOrder.baseQuantity) ? fillOrder.baseQuantity : baseQuantity;
+				placeOrderVars.fillQuoteQuantity = placeOrderVars.fillBaseQuantity * fillOrder.price / 10**marketDetails.baseTokenDecimals;
+				placeOrderVars.usedQuoteQuantity += placeOrderVars.fillQuoteQuantity;
+				emit OrderFill(placeOrderVars.fillOrderId, fillOrder.user, msg.sender, marketId, placeOrderVars.fillBaseQuantity, fillOrder.price, referrer);
 
 				if (side == Side.SELL) {
-					uint takerFee = fillQuoteQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
-					uint protocolFee = fillQuoteQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
-					uint quoteQuantityMinusFees = fillQuoteQuantity - takerFee - protocolFee;
+					uint takerFee = placeOrderVars.fillQuoteQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
+					uint protocolFee = placeOrderVars.fillQuoteQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
+					uint quoteQuantityMinusFees = placeOrderVars.fillQuoteQuantity - takerFee - protocolFee;
 					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
-					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, fillBaseQuantity);
+					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, placeOrderVars.fillBaseQuantity);
 					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.quoteToken, takerFee);
 					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
 				} else {
-					uint takerFee = fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
-					uint protocolFee = fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
-					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.baseToken, fillBaseQuantity - takerFee - protocolFee);
-					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, fillQuoteQuantity);
+					uint takerFee = placeOrderVars.fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
+					uint protocolFee = placeOrderVars.fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
+					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.baseToken, placeOrderVars.fillBaseQuantity - takerFee - protocolFee);
+					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, placeOrderVars.fillQuoteQuantity);
 					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.baseToken, takerFee);
 					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.baseToken, protocolFee);
 				}
