@@ -26,7 +26,53 @@ There is a frontend that goes with these smart contracts at [https://github.com/
 
 ## ABI
 
-`createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) returns (bytes32 marketId)`
+```
+// baseMinimum and quoteMinimum are minimum sizes to leave an order on the book
+// sizes below those numbers are run as immediate-or-cancel orders
+// partially filled orders that go below those thresholds are evicted from the book and the remaining amounts are refunded to the maker
+// feeNumerator and feeDenominator are both for taker fees. maker fees are always 0. 
+createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) returns (bytes32 marketId)
+
+// For markets with no fee, or if you would like to see the market fee burned, you can place orders without a referrer
+placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external payable returns (uint128 orderId) 
+
+// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
+placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external payable returns (uint128 orderId) 
+
+// if you want to place an order with a hint and no referrer
+placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint) public payable returns (uint128 orderId)
+
+// placeOrder function with hint
+// to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
+// if the placement of the hint order is further in the book than the order should be placed, it will fail with an error
+// set hintOrderId = 0 if you don't want to include a hint
+// The recommended behavior for revertOnBadHint is true to save gas
+// If you want to place hints on orders close to the front of a book (not that you necessarily should, front of the book orders can be run without a hint)
+// you can set this to false as a convenience so that if the hint order gets filled, your order runs as a normal insert
+// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
+placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint, address referrer) public payable returns (uint128 orderId)
+
+cancelOrder(bytes32 marketId, Side side, uint128 orderId) 
+
+withdrawFailedPayment(address payable bankAddress, address token) 
+
+// View Functions
+getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) public pure returns (bytes32)
+
+getMarketDetails(bytes32 marketId) public view returns (MarketDetails memory)
+
+getOrder(bytes32 marketId, Side side, uint128 orderId) external view returns (Order memory)
+
+getFirstOrderId(bytes32 marketId, Side side) external view returns (uint128)
+
+getOrderBook(bytes32 marketId, Side side, uint depth) external view returns (Order[] memory)
+
+// get an orderbook starting at a specific order id
+getOrderBookWithStartId(bytes32 marketId, Side side, uint depth, uint128 startOrderId) public view returns (Order[] memory) 
+
+failedPaymentBalance(address user, address bank, address token) external view returns (uint)
+```
+
 
 
 
