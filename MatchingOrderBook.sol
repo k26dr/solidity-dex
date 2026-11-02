@@ -334,7 +334,7 @@ contract MatchingOrderBook {
 		{
 			uint postQuoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
 			bool canPost = baseQuantity >= marketDetails.baseMinPostSize && postQuoteQuantity >= marketDetails.quoteMinPostSize;
-			require(placeOrderVars.fillOccurred || canPost, "order was too small to post. ran as fill or kill and failed to fill.");
+			require(placeOrderVars.fillOccurred || canPost, "order was too small to post. ran as immediate or cancel and failed to fill.");
 
 			// refund orders which filled but can't post
 			if (placeOrderVars.fillOccurred && !canPost) {
