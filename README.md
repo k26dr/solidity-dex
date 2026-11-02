@@ -63,8 +63,9 @@ cancelOrder(bytes32 marketId, Side side, uint128 orderId)
 withdrawFailedPayment(address payable bankAddress, address token) 
 ```
 
+## View Functions
+
 ```
-// View Functions
 getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) public pure returns (bytes32)
 
 getMarketDetails(bytes32 marketId) public view returns (MarketDetails memory)
