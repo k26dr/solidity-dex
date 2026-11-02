@@ -58,8 +58,10 @@ contract MatchingOrderBook {
 	struct MarketDetails {
 		address baseToken;
 		address quoteToken;
-		uint baseMinimum;
-		uint quoteMinimum;
+		uint basePostMin;
+		uint quotePostMin;
+		uint baseOrderMin;
+		uint quoteOrderMin;
 		uint feeNumerator;
 		uint feeDenominator;
 		uint baseTokenDecimals;
@@ -94,7 +96,7 @@ contract MatchingOrderBook {
 	event OrderCanceled(uint indexed orderId);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price, address referrer);
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
-	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
+	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
 	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount);
 	event ProtocolFeeChanged(uint newPercent);
@@ -126,14 +128,16 @@ contract MatchingOrderBook {
 		emit ProtocolFeeChanged(0);
 	}
 
-	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) external returns (bytes32 marketId) {
+	function createMarket(address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator) external returns (bytes32 marketId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
-		require(baseMinimum > 0, "baseMinimum must be atleast 1");
-		require(quoteMinimum > 0, "quoteMinimum must be atleast 1");
+		require(basePostMin > 0, "baseMinimum must be atleast 1");
+		require(quotePostMin > 0, "quoteMinimum must be atleast 1");
+		require(baseOrderMin > 0, "baseMinimum must be atleast 1");
+		require(quoteOrderMin > 0, "quoteMinimum must be atleast 1");
 		require(feeNumerator < feeDenominator, "fee numerator must be less than the denominator");
 		require(baseToken != quoteToken, "base and quote token must be different");
-		marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator);
+		marketId = getMarketId(baseToken, quoteToken, basePostMin, quotePostMin, baseOrderMin, quoteOrderMin, feeNumerator, feeDenominator);
 		require(MARKET_DETAILS[marketId].bankAddress == address(0), "market has already been created");
 		address payable bankAddress = payable(address(new Bank(address(this))));
 		uint8 baseTokenDecimals;
@@ -147,8 +151,8 @@ contract MatchingOrderBook {
 			require(decimalCallSuccess, "failed to get decimals for token");
 			baseTokenDecimals = baseTokenDecimalsVal;
 		}
-		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, bankAddress);
-		emit MarketCreated(marketId, baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator, baseTokenDecimals, bankAddress);
+		MARKET_DETAILS[marketId] = MarketDetails(baseToken, quoteToken, basePostMin, quotePostMin, baseOrderMin, quoteOrderMin, feeNumerator, feeDenominator, baseTokenDecimals, bankAddress);
+		emit MarketCreated(marketId, baseToken, quoteToken, basePostMin, quotePostMin, baseOrderMin, quoteOrderMin, feeNumerator, feeDenominator, baseTokenDecimals, bankAddress);
 		reentrancyGuard = false;
 	}
 
@@ -182,12 +186,12 @@ contract MatchingOrderBook {
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
 		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), 0, 0);
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
-		require(baseQuantity >= marketDetails.baseMinimum, "base quantity is below minimum");
+		require(baseQuantity >= marketDetails.baseOrderMin, "base quantity is below minimum");
 		require(price > 0, "zero price orders not permitted");
 		require(referrer != address(this), "cannot use orderbook contract as referrer");
 
 		placeOrderVars.quoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
-		require(placeOrderVars.quoteQuantity >= marketDetails.quoteMinimum, "calculated quote quantity is below minimum");
+		require(placeOrderVars.quoteQuantity >= marketDetails.quoteOrderMin, "calculated quote quantity is below minimum");
 
 		// This is to transfer tokens into the contract
 		// Support is included here for fee-for-transfer tokens which do not send the requested amount exactly.
@@ -295,8 +299,8 @@ contract MatchingOrderBook {
 					placeOrderVars.makerOrderPrice = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].price;
 					placeOrderVars.remainingMakerQuoteQuantity = placeOrderVars.remainingMakerBaseQuantity * placeOrderVars.makerOrderPrice / 
 						10**marketDetails.baseTokenDecimals;
-					if (placeOrderVars.remainingMakerBaseQuantity < marketDetails.baseMinimum || 
-					    placeOrderVars.remainingMakerQuoteQuantity < marketDetails.quoteMinimum) {
+					if (placeOrderVars.remainingMakerBaseQuantity < marketDetails.basePostMin || 
+					    placeOrderVars.remainingMakerQuoteQuantity < marketDetails.quotePostMin) {
 						placeOrderVars.maker = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].user;
 						
 						// delete the order
@@ -335,7 +339,7 @@ contract MatchingOrderBook {
 		// Block scope this to avoid too many local variables
 		{
 			uint postQuoteQuantity = baseQuantity * price / 10**marketDetails.baseTokenDecimals;
-			bool canPost = baseQuantity >= marketDetails.baseMinimum && postQuoteQuantity >= marketDetails.quoteMinimum;
+			bool canPost = baseQuantity >= marketDetails.basePostMin && postQuoteQuantity >= marketDetails.quotePostMin;
 			require(placeOrderVars.fillOccurred || canPost, "order was too small to post. ran as immediate or cancel and failed to fill.");
 
 			// refund orders which filled but can't post
@@ -475,8 +479,8 @@ contract MatchingOrderBook {
 		}
 	}
 
-	function getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) public pure returns (bytes32) {
-		return keccak256(abi.encodePacked(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator));
+	function getMarketId(address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator) public pure returns (bytes32) {
+		return keccak256(abi.encodePacked(baseToken, quoteToken, basePostMin, quotePostMin, baseOrderMin, quoteOrderMin, feeNumerator, feeDenominator));
 	}
 
 	function getMarketDetails(bytes32 marketId) public view returns (MarketDetails memory) {

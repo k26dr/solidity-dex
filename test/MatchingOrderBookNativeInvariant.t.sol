@@ -189,10 +189,10 @@ contract NativeMatchingOrderBookInvariantTest is Test {
 	function setUp() public {
 		USDC = new MockERC20("USDC", "USDC", 6);
 		orderBook = new MatchingOrderBook(payable(protocolFeeReceiver), 50);
-		orderBook.createMarket(address(0), address(USDC), 1, 1, 1, 1000);
-		orderBook.createMarket(address(USDC), address(0), 1, 1, 1, 1000);
-		nativeBaseMarketId = orderBook.getMarketId(address(0), address(USDC), 1, 1, 1, 1000);
-		nativeQuoteMarketId = orderBook.getMarketId(address(USDC), address(0), 1, 1, 1, 1000);
+		orderBook.createMarket(address(0), address(USDC), 1, 1, 1, 1, 1, 1000);
+		orderBook.createMarket(address(USDC), address(0), 1, 1, 1, 1, 1, 1000);
+		nativeBaseMarketId = orderBook.getMarketId(address(0), address(USDC), 1, 1, 1, 1, 1, 1000);
+		nativeQuoteMarketId = orderBook.getMarketId(address(USDC), address(0), 1, 1, 1, 1, 1, 1000);
 		nativeBaseBank = orderBook.getMarketDetails(nativeBaseMarketId).bankAddress;
 		nativeQuoteBank = orderBook.getMarketDetails(nativeQuoteMarketId).bankAddress;
 		handler = new NativeMatchingOrderBookHandler(orderBook, USDC, nativeBaseMarketId, nativeQuoteMarketId);
