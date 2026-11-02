@@ -45,13 +45,16 @@ createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quote
 
 placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external payable returns (uint128 orderId) 
 
+
 // referrer gets (100 - protocolFeePercent)% of any taker fee for the market
 
 placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external payable returns (uint128 orderId) 
 
+
 // if you want to place an order with a hint and no referrer
 
 placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint) public payable returns (uint128 orderId)
+
 
 // placeOrder function with hint
 // to place orders further back in the book, the hintOrderId can be used to specify an order ID to start iterating at
