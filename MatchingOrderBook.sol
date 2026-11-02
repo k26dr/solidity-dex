@@ -126,14 +126,14 @@ contract MatchingOrderBook {
 		emit ProtocolFeeChanged(0);
 	}
 
-	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) external {
+	function createMarket(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) external returns (bytes32 marketId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		require(baseMinimum > 0, "baseMinimum must be atleast 1");
 		require(quoteMinimum > 0, "quoteMinimum must be atleast 1");
 		require(feeNumerator < feeDenominator, "fee numerator must be less than the denominator");
 		require(baseToken != quoteToken, "base and quote token must be different");
-		bytes32 marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator);
+		marketId = getMarketId(baseToken, quoteToken, baseMinimum, quoteMinimum, feeNumerator, feeDenominator);
 		require(MARKET_DETAILS[marketId].bankAddress == address(0), "market has already been created");
 		address payable bankAddress = payable(address(new Bank(address(this))));
 		uint8 baseTokenDecimals;
