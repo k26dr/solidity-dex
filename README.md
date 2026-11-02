@@ -75,7 +75,7 @@ withdrawFailedPayment(address payable bankAddress, address token)
 failedPaymentBalance(address user, address bank, address token) external view returns (uint)
 ```
 
-## View Functions
+### Structs
 
 Many view functions return Order structs. Here's the format of the Order struct.
 
@@ -103,6 +103,8 @@ struct MarketDetails {
     address payable bankAddress;
 }
 ```
+
+### View Functions
 
 ```
 getMarketId(address baseToken, address quoteToken, uint baseMinimum, uint quoteMinimum, uint feeNumerator, uint feeDenominator) public pure returns (bytes32)
