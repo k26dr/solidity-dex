@@ -327,9 +327,10 @@ contract MatchingOrderBook {
 				}
 
 				if (baseQuantity <= fillOrder.baseQuantity) {
+					uint refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0; 
 					_settleTakerPlusFees(
 						side, 
-						(side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0, 
+						refundQty,
 						marketDetails.bankAddress,
 						marketDetails.baseToken,
 						marketDetails.quoteToken,
@@ -352,9 +353,10 @@ contract MatchingOrderBook {
 
 			// refund orders which filled but can't post
 			if (placeOrderVars.fillOccurred && !canPost) {
+				uint refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : baseQuantity;
 				_settleTakerPlusFees(
 					side, 
-					side == (Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : baseQuantity,
+					refundQty,
 					marketDetails.bankAddress,
 					marketDetails.baseToken,
 					marketDetails.quoteToken,
@@ -434,10 +436,18 @@ contract MatchingOrderBook {
 			orders[marketId][side][orderId] = Order(msg.sender, baseQuantity, price, nextOrderId, previousOrderId);
 
 			// refund leftover funds if necessary
-			if (side == Side.BUY) {
-				uint remainingQuoteQuantity = placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity;
-				_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
-			}
+			uint refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0; 
+			_settleTakerPlusFees(
+				side, 
+				refundQty,
+				marketDetails.bankAddress,
+				marketDetails.baseToken,
+				marketDetails.quoteToken,
+				placeOrderVars.takerOwed,
+				placeOrderVars.takerFeeOwed,
+				placeOrderVars.protocolFeeOwed,
+				referrer
+			);
 		}
 
 		emit OrderPlaced(orderId, msg.sender, marketId, side, baseQuantity, price);
