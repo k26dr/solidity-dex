@@ -14,7 +14,7 @@ Orders below the order minimum size are simply rejected. The order minimum size 
 
 A single base-quote token pair can have multiple markets with different post and order minimum sizes. This keeps the exchange flexible and allows us to get to a level where spam is no longer an issue. 
 
-Both versions have a risk isolation system to prevent malicious tokens from attacking other markets. Supported token types include standard ERC20 and non-standard fee-for-transfer tokens. ERC1363 are supported with a transfer gas limit of 110k. Anything more than that and you will have to recover the token using `withdrawFailedPayment`. 
+Both versions have a risk isolation system to prevent malicious tokens from attacking other markets. Supported token types include standard ERC20 and non-standard fee-for-transfer tokens. ERC1363 are supported with a transfer gas limit of 200k. Anything more than that and you will have to recover the token using `withdrawFailedPayment`. 
 
 Rebasing tokens are not supported and there is currently no plan to do so. 
 
