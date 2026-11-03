@@ -329,7 +329,7 @@ contract MatchingOrderBook {
 				if (baseQuantity <= fillOrder.baseQuantity) {
 					_settleTakerPlusFees(
 						side, 
-						placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity, 
+						(side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0, 
 						marketDetails.bankAddress,
 						marketDetails.baseToken,
 						marketDetails.quoteToken,
