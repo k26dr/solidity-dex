@@ -79,6 +79,9 @@ contract MatchingOrderBook {
 		address maker;
 		uint fillBaseQuantity;
 		uint fillQuoteQuantity;
+		uint takerOwed;
+		uint takerFeeOwed;
+		uint protocolFeeOwed;
 	}
 	mapping(bytes32 => MarketDetails) public MARKET_DETAILS; // market_id -> MarketDetails
 	mapping(bytes32 => mapping(Side => uint128)) orderbooks; // marketId -> Side -> firstOrderId
@@ -184,7 +187,7 @@ contract MatchingOrderBook {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
-		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), 0, 0);
+		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), 0, 0, 0, 0, 0);
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
 		require(baseQuantity >= marketDetails.baseOrderMin, "base quantity is below minimum");
 		require(price > 0, "zero price orders not permitted");
@@ -264,18 +267,17 @@ contract MatchingOrderBook {
 				if (side == Side.SELL) {
 					uint takerFee = placeOrderVars.fillQuoteQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = placeOrderVars.fillQuoteQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
-					uint quoteQuantityMinusFees = placeOrderVars.fillQuoteQuantity - takerFee - protocolFee;
-					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, quoteQuantityMinusFees);
+					placeOrderVars.takerFeeOwed += takerFee;
+					placeOrderVars.protocolFeeOwed += protocolFee;
+					placeOrderVars.takerOwed += placeOrderVars.fillQuoteQuantity - takerFee - protocolFee;
 					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, placeOrderVars.fillBaseQuantity);
-					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.quoteToken, takerFee);
-					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.quoteToken, protocolFee);
 				} else {
 					uint takerFee = placeOrderVars.fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = placeOrderVars.fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
-					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.baseToken, placeOrderVars.fillBaseQuantity - takerFee - protocolFee);
+					placeOrderVars.takerFeeOwed += takerFee;
+					placeOrderVars.protocolFeeOwed += protocolFee;
+					placeOrderVars.takerOwed += placeOrderVars.fillBaseQuantity - takerFee - protocolFee;
 					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, placeOrderVars.fillQuoteQuantity);
-					_payOrPark(marketDetails.bankAddress, referrer, marketDetails.baseToken, takerFee);
-					_payOrPark(marketDetails.bankAddress, protocolFeeReceiver, marketDetails.baseToken, protocolFee);
 				}
 
 				if (baseQuantity >= fillOrder.baseQuantity) {
@@ -325,11 +327,17 @@ contract MatchingOrderBook {
 				}
 
 				if (baseQuantity <= fillOrder.baseQuantity) {
-					// refund leftover funds if necessary
-					if (side == Side.BUY) {
-						uint remainingQuoteQuantity = placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity;
-						_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
-					}
+					_settleTakerPlusFees(
+						side, 
+						placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity, 
+						marketDetails.bankAddress,
+						marketDetails.baseToken,
+						marketDetails.quoteToken,
+						placeOrderVars.takerOwed,
+						placeOrderVars.takerFeeOwed,
+						placeOrderVars.protocolFeeOwed,
+						referrer
+					);
 					reentrancyGuard = false;
 					return 0;
 				}
@@ -344,13 +352,17 @@ contract MatchingOrderBook {
 
 			// refund orders which filled but can't post
 			if (placeOrderVars.fillOccurred && !canPost) {
-				if (side == Side.SELL) {
-					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.baseToken, baseQuantity);
-				} else {
-					// remainingQuoteQuantity and postQuoteQuantity can diverge significantly for orders that fill off the submitted taker price
-					uint remainingQuoteQuantity = placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity;
-					_payOrPark(marketDetails.bankAddress, msg.sender, marketDetails.quoteToken, remainingQuoteQuantity);
-				}
+				_settleTakerPlusFees(
+					side, 
+					side == (Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : baseQuantity,
+					marketDetails.bankAddress,
+					marketDetails.baseToken,
+					marketDetails.quoteToken,
+					placeOrderVars.takerOwed,
+					placeOrderVars.takerFeeOwed,
+					placeOrderVars.protocolFeeOwed,
+					referrer
+				);
 				reentrancyGuard = false;
 				return 0;
 			}
@@ -476,6 +488,22 @@ contract MatchingOrderBook {
 		catch {
 			failedPayments[to][bank][token] += amount;
 			emit PaymentFailed(to, bank, token, amount);
+		}
+	}
+
+	// remainingQuantity is in baseToken on sells and quoteToken on buys
+	function _settleTakerPlusFees(Side side, uint remainingQuantity, address payable bank, address baseToken, address quoteToken, uint takerOwed, uint takerFeeOwed, uint protocolFeeOwed, address referrer) internal {
+		// taker, protocol, and referrer split the amount the taker receives
+		address refundToken = (side == Side.SELL) ? baseToken : quoteToken;
+		address feeToken = (side == Side.SELL) ? quoteToken : baseToken;
+
+		_payOrPark(bank, msg.sender, feeToken, takerOwed);
+		_payOrPark(bank, referrer, feeToken, takerFeeOwed);
+		_payOrPark(bank, protocolFeeReceiver, feeToken, protocolFeeOwed);
+
+		// refund leftover taker funds if necessary
+		if (remainingQuantity > 0) {
+			_payOrPark(bank, msg.sender, refundToken, remainingQuantity);
 		}
 	}
 
