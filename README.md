@@ -1,6 +1,6 @@
 # On-Chain Matching Engine in Solidity
 
-This is an immutable smart contract limit order book that enforces price-time priority on fills. The primary contract here is [MatchingOrderBook.sol](MatchingOrderBook.sol). 
+This is an immutable smart contract limit order book written in Solidity that enforces price-time priority on fills. The primary contract here is [MatchingOrderBook.sol](MatchingOrderBook.sol). 
 
 Market creators can set custom taker fees and there is a referral system built in so that anyone can use this to make referral revenue. 
 
