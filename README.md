@@ -12,7 +12,7 @@ There are minimum post and order sizes on markets that are configurable during m
 
 Orders below the order minimum size are simply rejected. The order minimum size should be atleast 100,000 or so quote units large to be safe. The quote precision functions as a price tick, and if it's too low, rounding can cause issues. Example: USDC has 6 decimal places, so 100,000 units of USDC is 0.1 USDC. You should keep the order minimum size atleast this large to have good results. That's a minimum price tick  of 0.001%. Setting the protocol's cut of the fee higher than the minimum price tick percent is also a good idea to prevent people from exploiting the rounding. So if the price tick is 0.001% and the protocol keeps half the fee, a fee of 0.002% or greater will be safe. The attacker can self-refer on the fee so there's no guarantee he doesn't get the non-protocol part back.
 
-A single base-quote token pair can have multiple markets with different post and order minimum sizes. This keeps the exchange flexible and prevents spam orders from clogging both the orderbook and chain. 
+A single base-quote token pair can have multiple markets with different post and order minimum sizes. Minimum post sizes prevent spam orders from clogging the orderbook. Markets with post or order minimum sizes that are too low can become unusable.  
 
 Both versions have a risk isolation system to prevent malicious tokens from attacking other markets. Supported token types include standard ERC20 and non-standard fee-for-transfer tokens. ERC1363 are supported with a transfer gas limit of 200k. Anything more than that and you will have to recover the token using `withdrawFailedPayment`. 
 
