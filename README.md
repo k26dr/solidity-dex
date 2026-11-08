@@ -10,7 +10,7 @@ The taker fee is set during market creation. The fee is split between a referrer
 
 Risk isolation of markets is enforced. The funds for open orders and failed payments for each individual market are held in separate trustless contracts to prevent cross-contamination of risk. A hack due to a malicious token in one market will not spill over to other markets. 
 
-There are minimum post and order sizes on markets that are configurable during market creation. Any orders below the post minimum size are run as immediate or cancel operations. Any unfilled funds are returned to the user. If a maker order is partially filled and the remaining amount is less than the base or quote minimum, the remainder of the maker order is refunded to the maker. 
+There are minimum post and order sizes on markets that are configurable during market creation. Any orders below the post minimum size are run as immediate-or-cancel operations. Any unfilled funds are returned to the user. If a maker order is partially filled and the remaining amount is less than the base or quote minimum, the remainder of the maker order is refunded to the maker. 
 
 Orders below the order minimum size are simply rejected. The order minimum size should be atleast 100,000 or so quote units large to be safe. The quote precision functions as a price tick, and if it's too low, rounding can cause issues. 
 
