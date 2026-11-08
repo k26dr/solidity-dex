@@ -14,9 +14,9 @@ There are minimum post and order sizes on markets that are configurable during m
 
 Orders below the order minimum size are simply rejected. Order minimums should be set so that atleast 100,000 quote units are consumed in each order to prevent attacks from quote rounding.
 
-Example: ETH-USDC. USDC has 6 decimal places. 100,000 units of USDC is 0.1 USDC so that's the lowest you should take the quote minimum order size. If the lowest you think ETH will go is 200 USDC per ETH, the lowest you should set the base minimum size is .1 / 200 = 0.0005 ETH. This leads to a maximum price tick of 0.001%, which is much lower than the spread a market maker would set on this market.  
+Example: ETH-USDC. USDC has 6 decimal places. 100,000 units of USDC is 0.1 USDC so that's the lowest you should take the quote minimum order size. If the lowest you think ETH will go is 200 USDC per ETH, the lowest you should set the base minimum size is .1 / 200 = 0.0005 ETH. This leads to a maximum rounding slippage of 0.001%, which is much lower than the spread a market maker would set on this market.  
 
-For extremely low volatility markets like markets between two stablecoins of the same currency, an even lower maximum price tick might be required. 
+For extremely low volatility markets like markets between two stablecoins of the same currency, targeting an even lower maximum rounding slippage might be necessary. 
 
 Setting the protocol's cut of the fee higher than the maximum price tick percent is also a good idea to prevent people from exploiting the rounding. So if the maximum price tick is 0.001% and the protocol keeps half the fee, a taker fee of 0.002% or greater will be safe. The attacker can self-refer on the fee so there's no guarantee he doesn't get the non-protocol part back.
 
