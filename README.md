@@ -12,7 +12,7 @@ Risk isolation of markets is enforced. The funds for open orders and failed paym
 
 There are minimum post and order sizes on markets that are configurable during market creation. Any orders below the post minimum size are run as immediate-or-cancel operations. Any unfilled funds are returned to the user. If a maker order is partially filled and the remaining amount is less than the base or quote minimum, the remainder of the maker order is refunded to the maker. 
 
-Orders below the order minimum size are simply rejected. Order minimums should be atleast 100,000 quote units. Set the base minimum order size to an equivalent value to prevent attackers from trying to take advantage of rounding errors. 
+Orders below the order minimum size are simply rejected. Order minimums should be set so that atleast 100,000 quote units are consumed in each order to prevent attacks from quote rounding.
 
 Example: ETH-USDC. USDC has 6 decimal places. 100,000 units of USDC is 0.1 USDC so that's the lowest you should take the quote minimum order size. The ETH equivalent of that at 2500 USDC per ETH reference price is 0.00004 ETH, so that's the lowest you should take the base minimum order size. This leads to a maximum price tick of 0.001%, which is much lower than the spread a market maker would set on this market.  
 
