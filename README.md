@@ -12,7 +12,7 @@ There are minimum post and order sizes on markets that are configurable during m
 
 Orders below the order minimum size are simply rejected. The order minimum size should be atleast 100,000 or so quote units large to be safe. The quote precision functions as a price tick, and if it's too low, rounding can cause issues. 
 
-**Example**: USDC has 6 decimal places, so 100,000 units of USDC is 0.1 USDC. You should keep the order minimum size atleast this large to have good results. That's a minimum price tick  of 0.001%. 
+Example: USDC has 6 decimal places, so 100,000 units of USDC is 0.1 USDC. You should keep the order minimum size atleast this large to have good results. That's a minimum price tick  of 0.001%. 
 
 For extremely low volatility markets like markets between two stablecoins of the same currency, an even lower minimum price tick might be required. 
 
