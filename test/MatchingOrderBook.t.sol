@@ -2303,6 +2303,118 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, side), 0);
 	}
 
+	// Random order and post minimums and a random order on an empty book. The order is rejected when it is under
+	// an order minimum, runs as immediate-or-cancel (and reverts, with nothing to fill) when it is under a post
+	// minimum, and otherwise rests in the book with exactly its deposit escrowed
+	struct MinFuzz {
+		uint baseOrderMin;
+		uint quoteOrderMin;
+		uint basePostMin;
+		uint quotePostMin;
+		uint qty;
+		uint price;
+		uint quote;
+	}
+
+	function testFuzzMinimumsEmptyBook(bool isSell, uint qty, uint price, uint baseOrderMin, uint quoteOrderMin, uint basePostMin, uint quotePostMin) public {
+		MinFuzz memory f;
+		f.baseOrderMin = bound(baseOrderMin, 1, 1e12);
+		f.quoteOrderMin = bound(quoteOrderMin, 1, 1e12);
+		f.basePostMin = bound(basePostMin, 1, 1e12);
+		f.quotePostMin = bound(quotePostMin, 1, 1e12);
+		f.qty = bound(qty, 1, 1e13);
+		f.price = bound(price, 1, 1e8);
+		f.quote = f.qty * f.price / 1e6;
+		bytes32 marketId = orderBook.createMarket(address(EURT), address(USDC), f.basePostMin, f.quotePostMin, f.baseOrderMin, f.quoteOrderMin, 0, 1);
+		address bank = orderBook.getMarketDetails(marketId).bankAddress;
+		MatchingOrderBook.Side side = isSell ? MatchingOrderBook.Side.SELL : MatchingOrderBook.Side.BUY;
+		if (isSell) EURT.mint(user2, f.qty);
+		else USDC.mint(user2, f.quote);
+		vm.startPrank(user2);
+		EURT.approve(address(orderBook), type(uint).max);
+		USDC.approve(address(orderBook), type(uint).max);
+
+		if (f.qty < f.baseOrderMin) vm.expectRevert("base quantity is below minimum");
+		else if (f.quote < f.quoteOrderMin) vm.expectRevert("calculated quote quantity is below minimum");
+		else if (f.qty < f.basePostMin || f.quote < f.quotePostMin) vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
+		uint128 id = orderBook.placeOrder(marketId, side, f.qty, f.price);
+		vm.stopPrank();
+
+		bool posts = f.qty >= f.baseOrderMin && f.quote >= f.quoteOrderMin && f.qty >= f.basePostMin && f.quote >= f.quotePostMin;
+		if (posts) {
+			assertEq(orderBook.getOrder(marketId, side, id).baseQuantity, f.qty);
+			assertEq(isSell ? EURT.balanceOf(bank) : USDC.balanceOf(bank), isSell ? f.qty : f.quote, "deposit escrowed");
+			assertEq(isSell ? EURT.balanceOf(user2) : USDC.balanceOf(user2), 0);
+		} else {
+			assertEq(isSell ? EURT.balanceOf(user2) : USDC.balanceOf(user2), isSell ? f.qty : f.quote, "nothing moved");
+			assertEq(orderBook.orderCounter(), 0);
+		}
+	}
+
+	// Random minimums, a resting ask that meets them, and a random buy at the ask's price. Checks that the buy is
+	// rejected under the order minimums, that the ask's remainder is refunded exactly when it falls under a post
+	// minimum, and that the buy's own leftover rests only when it meets the post minimums
+	function testFuzzMinimumsAgainstMaker(uint qty, uint makerExtra, uint price, uint baseOrderMin, uint quoteOrderMin, uint basePostMin, uint quotePostMin) public {
+		MinFuzz memory f;
+		f.baseOrderMin = bound(baseOrderMin, 1, 1e12);
+		f.quoteOrderMin = bound(quoteOrderMin, 1, 1e12);
+		f.basePostMin = bound(basePostMin, 1, 1e12);
+		f.quotePostMin = bound(quotePostMin, 1, 1e12);
+		f.price = bound(price, 1, 1e8);
+		f.qty = bound(qty, 1, 1e14);
+		bytes32 marketId = orderBook.createMarket(address(EURT), address(USDC), f.basePostMin, f.quotePostMin, f.baseOrderMin, f.quoteOrderMin, 0, 1);
+
+		// the smallest ask that meets every minimum at this price, plus a random extra
+		uint makerQty = _max(f.basePostMin, f.baseOrderMin);
+		uint quoteFloor = _max(f.quotePostMin, f.quoteOrderMin);
+		makerQty = _max(makerQty, (quoteFloor * 1e6 + f.price - 1) / f.price) + bound(makerExtra, 0, 1e13);
+		EURT.mint(user2, makerQty);
+		vm.startPrank(user2);
+		EURT.approve(address(orderBook), type(uint).max);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, makerQty, f.price);
+		vm.stopPrank();
+
+		f.quote = f.qty * f.price / 1e6;
+		USDC.mint(user3, f.quote);
+		vm.startPrank(user3);
+		USDC.approve(address(orderBook), type(uint).max);
+		if (f.qty < f.baseOrderMin) vm.expectRevert("base quantity is below minimum");
+		else if (f.quote < f.quoteOrderMin) vm.expectRevert("calculated quote quantity is below minimum");
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, f.qty, f.price);
+		vm.stopPrank();
+		if (f.qty < f.baseOrderMin || f.quote < f.quoteOrderMin) {
+			assertEq(USDC.balanceOf(user3), f.quote, "rejected buy moved nothing");
+			assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, makerQty);
+			return;
+		}
+		_checkMakerAndTaker(marketId, askId, makerQty, f);
+	}
+
+	function _checkMakerAndTaker(bytes32 marketId, uint128 askId, uint makerQty, MinFuzz memory f) internal view {
+		uint fill = f.qty < makerQty ? f.qty : makerQty;
+		uint makerLeft = makerQty - fill;
+		bool makerEvicted = makerLeft > 0 && (makerLeft < f.basePostMin || makerLeft * f.price / 1e6 < f.quotePostMin);
+		uint takerLeft = f.qty - fill;
+		bool takerPosts = takerLeft > 0 && takerLeft >= f.basePostMin && takerLeft * f.price / 1e6 >= f.quotePostMin;
+
+		// the seller is paid for the fill and gets back any evicted remainder
+		assertEq(USDC.balanceOf(user2), fill * f.price / 1e6, "seller paid for the fill");
+		assertEq(EURT.balanceOf(user2), makerEvicted ? makerLeft : 0, "evicted remainder refunded");
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, makerEvicted ? 0 : makerLeft);
+
+		// the buyer gets the fill, and keeps or escrows the rest of its USDC depending on whether its leftover rests
+		assertEq(EURT.balanceOf(user3), fill, "buyer received the fill");
+		uint escrow = takerPosts ? takerLeft * f.price / 1e6 : 0;
+		assertEq(USDC.balanceOf(user3), f.quote - fill * f.price / 1e6 - escrow, "buyer refunded the rest");
+		uint128 bestBid = orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY);
+		if (takerPosts) assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bestBid).baseQuantity, takerLeft);
+		else assertEq(bestBid, 0, "leftover under the post minimum did not rest");
+	}
+
+	function _max(uint a, uint b) internal pure returns (uint) {
+		return a > b ? a : b;
+	}
+
 	// ---------- Price-time priority ----------
 	// Generated by Claude, so brevity was not a concern here
 
@@ -3267,6 +3379,22 @@ contract MatchingOrderBookTest is Test {
 		assertTrue(orderBook.getMarketDetails(orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 1, 1, 0, 1)).bankAddress != address(0));
 	}
 
+	// Each minimum is checked on its own, with its own error: a zero order minimum is rejected even when the
+	// matching post minimum is fine, and a zero post minimum is rejected even when the order minimum is fine
+	function testCreateMarketZeroOrderMinimumsRevert() public {
+		vm.expectRevert("baseOrderMin must be atleast 1");
+		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 0, 1, 0, 1); // base order minimum 0
+		vm.expectRevert("quoteOrderMin must be atleast 1");
+		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 1, 0, 0, 1); // quote order minimum 0
+		vm.expectRevert("basePostMin must be atleast 1");
+		orderBook.createMarket(address(EURT), address(USDC), 0, 1, 1, 1, 0, 1); // base post minimum 0
+		vm.expectRevert("quotePostMin must be atleast 1");
+		orderBook.createMarket(address(EURT), address(USDC), 1, 0, 1, 1, 0, 1); // quote post minimum 0
+		// none of those created a market
+		assertEq(orderBook.getMarketDetails(orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 0, 1, 0, 1)).bankAddress, address(0));
+		assertEq(orderBook.getMarketDetails(orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 1, 0, 0, 1)).bankAddress, address(0));
+	}
+
 	// ---------------------------------------------------------------------------------------------
 	// Native token markets. address(0) stands for the chain's native token and is deposited via msg.value.
 	// Fresh addresses are used so native payouts never land on a precompile.
@@ -3618,6 +3746,109 @@ contract MatchingOrderBookTest is Test {
 		orderBook.placeOrderWithHint{value: 0.1e18 - 1}(marketId, SELL, 0.1e18, 2004.5e6, 999, false, address(0));
 		assertEq(bank.balance, 0.6e18);
 		assertEq(ethUser1.balance, 10 ether - 0.7e18);
+	}
+
+	// ETH / USDC with order minimums of 0.1 ETH and 200 USDC and post minimums of 1 ETH and 2000 USDC.
+	// Sells deposit ETH with msg.value. Rejected and immediate-or-cancel orders revert, so no ETH moves.
+	function testNativeBaseMinimums() public {
+		_fundNativeUsers();
+		bytes32 marketId = orderBook.createMarket(address(0), address(USDC), 1e18, 2000e6, 0.1e18, 200e6, 0, 1);
+		address payable bank = orderBook.getMarketDetails(marketId).bankAddress;
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+
+		// under the base order minimum, under the quote order minimum, and between the order and post minimums
+		vm.prank(ethUser1);
+		vm.expectRevert("base quantity is below minimum");
+		orderBook.placeOrder{value: 0.1e18 - 1}(marketId, SELL, 0.1e18 - 1, 3000e6);
+		vm.prank(ethUser1);
+		vm.expectRevert("calculated quote quantity is below minimum");
+		orderBook.placeOrder{value: 0.1e18}(marketId, SELL, 0.1e18, 1999.99e6);
+		vm.prank(ethUser1);
+		vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
+		orderBook.placeOrder{value: 0.5e18}(marketId, SELL, 0.5e18, 2000e6);
+		// the same three on the buy side, which pays in USDC
+		vm.prank(ethUser2);
+		vm.expectRevert("base quantity is below minimum");
+		orderBook.placeOrder(marketId, BUY, 0.1e18 - 1, 3000e6);
+		vm.prank(ethUser2);
+		vm.expectRevert("calculated quote quantity is below minimum");
+		orderBook.placeOrder(marketId, BUY, 0.1e18, 1999.99e6);
+		vm.prank(ethUser2);
+		vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
+		orderBook.placeOrder(marketId, BUY, 0.5e18, 2000e6);
+		assertEq(ethUser1.balance, 10 ether, "no ETH moved");
+		assertEq(USDC.balanceOf(ethUser2), 10000e6, "no USDC moved");
+		assertEq(bank.balance, 0);
+
+		// exactly at both post minimums: 1 ETH at 2000 USDC rests in the book
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(marketId, SELL, 1e18, 2000e6);
+		assertEq(bank.balance, 1e18);
+
+		// a buy of exactly the order minimums (0.1 ETH for 200 USDC) fills. The 0.9 ETH left is under the
+		// post minimum, so it goes back to the seller and the ask leaves the book
+		vm.prank(ethUser2);
+		assertEq(orderBook.placeOrder(marketId, BUY, 0.1e18, 2000e6), 0);
+		assertEq(orderBook.getOrder(marketId, SELL, askId).baseQuantity, 0);
+		assertEq(ethUser1.balance, 10 ether - 0.1e18, "seller got the unfilled 0.9 ETH back");
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 200e6);
+		assertEq(ethUser2.balance, 10 ether + 0.1e18);
+		assertEq(USDC.balanceOf(ethUser2), 10000e6 - 200e6);
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// USDC / ETH with order minimums of 100 USDC and 0.05 ETH and post minimums of 1000 USDC and 0.5 ETH.
+	// Buys deposit ETH with msg.value.
+	function testNativeQuoteMinimums() public {
+		_fundNativeUsers();
+		bytes32 marketId = orderBook.createMarket(address(USDC), address(0), 1000e6, 0.5e18, 100e6, 0.05e18, 0, 1);
+		address payable bank = orderBook.getMarketDetails(marketId).bankAddress;
+		MatchingOrderBook.Side SELL = MatchingOrderBook.Side.SELL;
+		MatchingOrderBook.Side BUY = MatchingOrderBook.Side.BUY;
+		uint price = 0.0005e18; // ETH per USDC
+
+		// buys: under the base order minimum, under the quote order minimum, and between the minimums
+		vm.prank(ethUser2);
+		vm.expectRevert("base quantity is below minimum");
+		orderBook.placeOrder{value: (100e6 - 1) * price / 1e6}(marketId, BUY, 100e6 - 1, price);
+		vm.prank(ethUser2);
+		vm.expectRevert("calculated quote quantity is below minimum");
+		orderBook.placeOrder{value: 100e6 * (price - 1) / 1e6}(marketId, BUY, 100e6, price - 1);
+		vm.prank(ethUser2);
+		vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
+		orderBook.placeOrder{value: 0.25e18}(marketId, BUY, 500e6, price);
+		// sells, which pay in USDC
+		vm.prank(ethUser1);
+		vm.expectRevert("base quantity is below minimum");
+		orderBook.placeOrder(marketId, SELL, 100e6 - 1, price);
+		vm.prank(ethUser1);
+		vm.expectRevert("calculated quote quantity is below minimum");
+		orderBook.placeOrder(marketId, SELL, 100e6, price - 1);
+		vm.prank(ethUser1);
+		vm.expectRevert("order was too small to post. ran as immediate or cancel and failed to fill.");
+		orderBook.placeOrder(marketId, SELL, 500e6, price);
+		assertEq(ethUser2.balance, 10 ether, "no ETH moved");
+		assertEq(USDC.balanceOf(ethUser1), 10000e6, "no USDC moved");
+		assertEq(bank.balance, 0);
+
+		// exactly at both post minimums: a bid for 1000 USDC paying 0.5 ETH rests in the book
+		vm.prank(ethUser2);
+		uint128 bidId = orderBook.placeOrder{value: 0.5e18}(marketId, BUY, 1000e6, price);
+		assertEq(bank.balance, 0.5e18);
+
+		// a sell of exactly the order minimums (100 USDC for 0.05 ETH) fills. The 900 USDC left on the bid is
+		// under the post minimum, so the buyer gets its unused 0.45 ETH back and the bid leaves the book
+		vm.prank(ethUser1);
+		assertEq(orderBook.placeOrder(marketId, SELL, 100e6, price), 0);
+		assertEq(orderBook.getOrder(marketId, BUY, bidId).baseQuantity, 0);
+		assertEq(ethUser2.balance, 10 ether - 0.05e18, "buyer got the unused 0.45 ETH back");
+		assertEq(USDC.balanceOf(ethUser2), 10000e6 + 100e6);
+		assertEq(ethUser1.balance, 10 ether + 0.05e18);
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 - 100e6);
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
 	}
 
 	// ---------------------------------------------------------------------------------------------
