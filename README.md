@@ -16,7 +16,7 @@ Orders below the order minimum size are simply rejected. Order minimums should b
 
 Example: ETH-USDC. USDC has 6 decimal places. 100,000 units of USDC is 0.1 USDC so that's the lowest you should take the quote minimum order size. If the lowest you think ETH will go is 200 USDC per ETH, the lowest you should set the base minimum size is .1 / 200 = 0.0005 ETH. This leads to a maximum rounding slippage of 0.001%, which is much lower than the spread a market maker would set on this market.  
 
-Obviously you can set the order minimums higher than the baseline requirement, so there's nothing wrong with setting a huge margin of error, say 1 USDC and 0.0005 ETH in the example above. 
+Obviously you can set the order minimums higher than the baseline requirement, so there's nothing wrong with setting a huge margin of error, like say 1 USDC and 0.0005 ETH in the example above. 
 
 For extremely low volatility markets like markets between two stablecoins of the same currency, targeting an even lower maximum rounding slippage might be necessary. 
 
