@@ -3259,9 +3259,9 @@ contract MatchingOrderBookTest is Test {
 
 	// Markets need minimums of at least 1 on both sides
 	function testCreateMarketZeroMinimumsRevert() public {
-		vm.expectRevert("baseMinimum must be atleast 1");
+		vm.expectRevert("basePostMin must be atleast 1");
 		orderBook.createMarket(address(EURT), address(USDC), 0, 1, 0, 1, 0, 1);
-		vm.expectRevert("quoteMinimum must be atleast 1");
+		vm.expectRevert("quotePostMin must be atleast 1");
 		orderBook.createMarket(address(EURT), address(USDC), 1, 0, 1, 0, 0, 1);
 		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 1, 1, 0, 1);
 		assertTrue(orderBook.getMarketDetails(orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 1, 1, 0, 1)).bankAddress != address(0));
