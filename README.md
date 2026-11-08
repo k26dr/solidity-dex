@@ -16,7 +16,7 @@ Example: USDC has 6 decimal places, so 100,000 units of USDC is 0.1 USDC. You sh
 
 For extremely low volatility markets like markets between two stablecoins of the same currency, an even lower maximum price tick might be required. 
 
-Setting the protocol's cut of the fee higher than the maximum price tick percent is also a good idea to prevent people from exploiting the rounding. So if the maximum price tick is 0.001% and the protocol keeps half the fee, a fee of 0.002% or greater will be safe. The attacker can self-refer on the fee so there's no guarantee he doesn't get the non-protocol part back.
+Setting the protocol's cut of the fee higher than the maximum price tick percent is also a good idea to prevent people from exploiting the rounding. So if the maximum price tick is 0.001% and the protocol keeps half the fee, a taker fee of 0.002% or greater will be safe. The attacker can self-refer on the fee so there's no guarantee he doesn't get the non-protocol part back.
 
 A single base-quote token pair can have multiple markets with different post and order minimum sizes. Minimum post sizes prevent spam orders from clogging the orderbook. Markets with post or order minimum sizes that are too low can become unusable, so be deliberate when creating or selecting markets. 
 
