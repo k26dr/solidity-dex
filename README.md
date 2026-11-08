@@ -1,4 +1,4 @@
-# On-Chain Matching Engine in Solidity
+# Decentralized Matching Engine in Solidity
 
 This is an immutable smart contract limit order book written in Solidity that enforces price-time priority on fills. There are no owner keys anywhere in the contract, no centralized control of any kind, and addresses cannot touch or withdraw funds or orders that were submitted by a different address. 
 
