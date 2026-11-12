@@ -52,7 +52,7 @@ createMarket(address baseToken, address quoteToken, uint basePostMin, uint quote
 ### Placing Orders
 
 ```
-// For markets with no fee, or if you would like to see the market fee burned, you can place orders without a referrer
+// For markets with no fee you can place orders without a referrer
 
 placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external payable returns (uint128 orderId) 
 

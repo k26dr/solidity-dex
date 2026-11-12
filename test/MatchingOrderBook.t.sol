@@ -2922,8 +2922,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(USDC.balanceOf(bank), 100e6);
 	}
 
-	// With no referrer, the taker still pays the full fee, the protocol gets its share,
-	// and the referrer share is held for address(0), where nobody can withdraw it (effectively burned)
+	// With no referrer, the whole fee goes to the protocol
 	function testZeroReferrerShareGoesToProtocol() public {
 		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 1, 1, 1, 100);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 1, 1, 1, 100);
