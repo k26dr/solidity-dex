@@ -31,7 +31,8 @@ contract Bank {
 				require(sent, "native token send to user failed");
 			}
 			else {
-				payable(user).transfer(amount);
+				(bool sent,) = user.call{value: amount, gas: 10e3}("");
+				require(sent, "native token send to user failed");
 			}
 		}
 		else {
