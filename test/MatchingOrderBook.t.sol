@@ -33,7 +33,7 @@ contract MatchingOrderBookTest is Test {
 	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount, address sentTo);
 	event ProtocolFeeChanged(uint newPercent);
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, MatchingOrderBook.Side side, uint baseQuantity, uint price);
-	event OrderCanceled(uint indexed orderId);
+	event OrderCanceled(uint indexed orderId, address sentTo);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price, address referrer);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 
@@ -3423,7 +3423,7 @@ contract MatchingOrderBookTest is Test {
 		uint128 orderId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
 
 		vm.expectEmit(true, false, false, true, address(orderBook));
-		emit OrderCanceled(orderId);
+		emit OrderCanceled(orderId, user1);
 		vm.prank(user1);
 		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, orderId);
 	}
@@ -4195,7 +4195,8 @@ contract MatchingOrderBookTest is Test {
 
 		vm.expectEmit(true, true, true, true, safe);
 		emit SafeReceived(bank, 1e18);
-		_safeExec(safe, address(orderBook), 0, abi.encodeCall(orderBook.cancelOrder, (marketId, MatchingOrderBook.Side.SELL, askId)));
+		// cancelOrder is overloaded too, so abi.encodeCall can't pick one
+		_safeExec(safe, address(orderBook), 0, abi.encodeWithSignature("cancelOrder(bytes32,uint8,uint128)", marketId, MatchingOrderBook.Side.SELL, askId));
 
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
 		assertEq(safe.balance, 1e18, "refund arrives in the Safe");

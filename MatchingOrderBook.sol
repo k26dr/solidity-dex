@@ -97,7 +97,7 @@ contract MatchingOrderBook {
 	bool reentrancyGuard = false;
 
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
-	event OrderCanceled(uint indexed orderId);
+	event OrderCanceled(uint indexed orderId, address sentTo);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price, address referrer);
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
@@ -455,7 +455,14 @@ contract MatchingOrderBook {
 		reentrancyGuard = false;
 	}
 
-	function cancelOrder(bytes32 marketId, Side side, uint128 orderId) external {
+	// default cancelOrder sends canceled funds back to user
+	function cancelOrder(bytes32 marketId, Side side, uint128 orderId) public {
+		cancelOrder(marketId, side, orderId, msg.sender);
+	}
+
+	// the optional sendTo address allows canceled funds to be sent to someone other than the user
+	// in case there is some kind of security issue with the main wallet
+	function cancelOrder(bytes32 marketId, Side side, uint128 orderId, address sendTo) public {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
@@ -473,12 +480,12 @@ contract MatchingOrderBook {
 		}
 
 		if (side == Side.SELL) {
-			_payOrPark(marketDetails.bankAddress, order.user, marketDetails.baseToken, order.baseQuantity);
+			_payOrPark(marketDetails.bankAddress, sendTo, marketDetails.baseToken, order.baseQuantity);
 		} else if (side == Side.BUY) {
 			uint quoteQuantity = order.baseQuantity * order.price / 10**marketDetails.baseTokenDecimals;
-			_payOrPark(marketDetails.bankAddress, order.user, marketDetails.quoteToken, quoteQuantity);
+			_payOrPark(marketDetails.bankAddress, sendTo, marketDetails.quoteToken, quoteQuantity);
 		}
-		emit OrderCanceled(orderId);
+		emit OrderCanceled(orderId, sendTo);
 		reentrancyGuard = false;
 	}
 
