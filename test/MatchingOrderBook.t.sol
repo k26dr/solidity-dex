@@ -8,6 +8,7 @@ import "./FeeOnTransferERC20.sol";
 import "./PayableERC20.sol";
 import "./FreezableERC20.sol";
 import "./ReentrantNativeReceiver.sol";
+import "./SafeStyleWallet.sol";
 
 contract MatchingOrderBookTest is Test {
 	MatchingOrderBook orderBook;
@@ -4005,5 +4006,141 @@ contract MatchingOrderBookTest is Test {
 		assertEq(address(attacker).balance, 1e18);
 		assertEq(bank.balance, 0);
 		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
+	}
+
+	// ---------------------------------------------------------------------------------------------
+	// Safe-style smart wallets. A Safe is a proxy that delegatecalls a singleton whose receive() emits an
+	// event, so accepting native token costs it about 6.3k gas and a 2300 gas transfer can never pay it.
+	// Bank.withdrawTo gives native payouts 10k gas (plus the 2300 stipend the EVM adds to any call with
+	// value), which has to be enough for the payout to land in the wallet instead of being parked.
+	// Every test checks three things: the wallet's balance went up, the wallet itself emitted SafeReceived
+	// for the exact amount, and nothing was left in failedPayments.
+	// ---------------------------------------------------------------------------------------------
+	address safeOwner = address(0x5AFE);
+
+	// copy of the wallet's event so tests can check it with vm.expectEmit
+	event SafeReceived(address indexed sender, uint256 value);
+
+	// Deploys a singleton and a proxy wallet owned by safeOwner, with USDC approved for the order book
+	function _deploySafeWallet() internal returns (address payable safe, address singleton) {
+		singleton = address(new SafeStyleSingleton());
+		safe = payable(address(new SafeStyleProxy(singleton)));
+		SafeStyleSingleton(safe).setup(safeOwner);
+		_safeExec(safe, address(USDC), 0, abi.encodeCall(USDC.approve, (address(orderBook), type(uint).max)));
+	}
+
+	// Has the owner send a transaction through the wallet, so msg.sender at the target is the wallet
+	function _safeExec(address payable safe, address to, uint value, bytes memory data) internal returns (bytes memory) {
+		vm.prank(safeOwner);
+		return SafeStyleSingleton(safe).execTransaction(to, value, data);
+	}
+
+	// placeOrder is overloaded so abi.encodeCall can't pick one. This is the overload with a referrer.
+	function _placeOrderCall(bytes32 marketId, MatchingOrderBook.Side side, uint baseQuantity, uint price, address ref) internal pure returns (bytes memory) {
+		return abi.encodeWithSignature("placeOrder(bytes32,uint8,uint256,uint256,address)", marketId, side, baseQuantity, price, ref);
+	}
+
+	// A forge test runs as one transaction, so the wallet is still warm from being deployed and used. On chain
+	// a maker's wallet has not been touched when somebody else's fill pays it, and cold access is the expensive
+	// case (2100 for the slot read + 2600 for the delegatecall instead of 100 each). Cool both contracts so
+	// the payout is charged the way it would be on chain.
+	function _coolSafeWallet(address safe, address singleton) internal {
+		vm.cool(safe);
+		vm.cool(singleton);
+	}
+
+	// Safe is the maker and bids 1 ETH at 2000 USDC. A plain taker sells 1 ETH into it. The ETH goes straight
+	// to the Safe.
+	function testSafeWalletMakerReceivesNative() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
+		(address payable safe, address singleton) = _deploySafeWallet();
+		USDC.mint(safe, 2000e6);
+		uint128 bidId = abi.decode(_safeExec(safe, address(orderBook), 0, _placeOrderCall(marketId, MatchingOrderBook.Side.BUY, 1e18, 2000e6, address(0))), (uint128));
+		assertGt(bidId, 0, "bid rests in the book");
+		assertEq(USDC.balanceOf(safe), 0);
+		assertEq(USDC.balanceOf(bank), 2000e6);
+
+		_coolSafeWallet(safe, singleton);
+		vm.expectEmit(true, true, true, true, safe);
+		emit SafeReceived(bank, 1e18);
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6, ethReferrer);
+		assertEq(askId, 0, "taker fully filled, nothing posted");
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+
+		assertEq(safe.balance, 1e18, "ETH arrives in the Safe");
+		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6 - 2e6, "taker gets USDC minus 0.1% fee");
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// Safe is the taker and buys 1 ETH with 2000 USDC. Taker fee is in base (ETH), so the Safe receives
+	// 0.999 ETH. No cooling here: the Safe is the caller, so it is warm on chain as well.
+	function testSafeWalletTakerReceivesNative() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
+		(address payable safe, ) = _deploySafeWallet();
+		USDC.mint(safe, 2000e6);
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+		assertEq(bank.balance, 1e18);
+
+		vm.expectEmit(true, true, true, true, safe);
+		emit SafeReceived(bank, 0.999e18);
+		uint128 bidId = abi.decode(_safeExec(safe, address(orderBook), 0, _placeOrderCall(marketId, MatchingOrderBook.Side.BUY, 1e18, 2000e6, ethReferrer)), (uint128));
+		assertEq(bidId, 0, "taker fully filled, nothing posted");
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+
+		assertEq(safe.balance, 0.999e18, "ETH minus 0.1% fee arrives in the Safe");
+		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
+		assertEq(USDC.balanceOf(safe), 0);
+		assertEq(ethReferrer.balance, 0.0005e18);
+		assertEq(protocolFeeReceiver.balance, 0.0005e18);
+		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6, "maker receives the USDC");
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// Safe bids above the ask on a native quote market. It deposits 0.06 ETH, fills at 0.0005 for 0.05 ETH and
+	// the unused 0.01 ETH is refunded straight to the Safe along with the USDC it bought.
+	function testSafeWalletTakerRefundReceivesNative() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeQuoteMarket();
+		(address payable safe, ) = _deploySafeWallet();
+		vm.deal(safe, 0.06e18);
+		vm.prank(ethUser1);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 0.0005e18);
+
+		vm.expectEmit(true, true, true, true, safe);
+		emit SafeReceived(bank, 0.01e18);
+		uint128 bidId = abi.decode(_safeExec(safe, address(orderBook), 0.06e18, _placeOrderCall(marketId, MatchingOrderBook.Side.BUY, 100e6, 0.0006e18, address(0))), (uint128));
+		assertEq(bidId, 0, "taker fully filled, nothing posted");
+
+		assertEq(safe.balance, 0.01e18, "only the fill price is spent, the rest comes back to the Safe");
+		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
+		assertEq(USDC.balanceOf(safe), 100e6 - 0.1e6, "Safe gets USDC minus 0.1% fee");
+		assertEq(orderBook.failedPaymentBalance(safe, bank, address(USDC)), 0);
+		assertEq(ethUser1.balance, 10 ether + 0.05e18, "maker receives the ETH");
+		assertEq(bank.balance, 0);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// Safe posts a 1 ETH ask and cancels it. The escrowed ETH is refunded straight to the Safe.
+	function testSafeWalletCancelRefundReceivesNative() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
+		(address payable safe, ) = _deploySafeWallet();
+		vm.deal(safe, 1e18);
+		uint128 askId = abi.decode(_safeExec(safe, address(orderBook), 1e18, _placeOrderCall(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6, address(0))), (uint128));
+		assertGt(askId, 0, "ask rests in the book");
+		assertEq(safe.balance, 0);
+		assertEq(bank.balance, 1e18);
+
+		vm.expectEmit(true, true, true, true, safe);
+		emit SafeReceived(bank, 1e18);
+		_safeExec(safe, address(orderBook), 0, abi.encodeCall(orderBook.cancelOrder, (marketId, MatchingOrderBook.Side.SELL, askId)));
+
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+		assertEq(safe.balance, 1e18, "refund arrives in the Safe");
+		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
+		assertEq(bank.balance, 0);
 	}
 }
