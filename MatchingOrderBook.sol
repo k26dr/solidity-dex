@@ -510,13 +510,13 @@ contract MatchingOrderBook {
 
 		_payOrPark(bank, msg.sender, feeToken, takerOwed);
 		if (referrer == address(0)) {
-			_payOrPark(bank, protocolFeeReceiver, feeToken, takerFeeOwed);
+			_payOrPark(bank, protocolFeeReceiver, feeToken, takerFeeOwed + protocolFeeOwed);
 		}
 		else {
 			_payOrPark(bank, referrer, feeToken, takerFeeOwed);
+			_payOrPark(bank, protocolFeeReceiver, feeToken, protocolFeeOwed);
 		}
 
-		_payOrPark(bank, protocolFeeReceiver, feeToken, protocolFeeOwed);
 
 		// refund leftover taker funds if necessary
 		if (remainingQuantity > 0) {
