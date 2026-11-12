@@ -2924,7 +2924,7 @@ contract MatchingOrderBookTest is Test {
 
 	// With no referrer, the taker still pays the full fee, the protocol gets its share,
 	// and the referrer share is held for address(0), where nobody can withdraw it (effectively burned)
-	function testZeroReferrerShareBurned() public {
+	function testZeroReferrerShareGoesToProtocol() public {
 		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 1, 1, 1, 100);
 		bytes32 marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 1, 1, 1, 100);
 		address bank = orderBook.getMarketDetails(marketId).bankAddress;
@@ -2935,26 +2935,26 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		USDC.approve(address(orderBook), 100e18);
 
-		// taker buys 100 EURT: 1 EURT fee, 0.5 to protocol, 0.5 held for address(0)
+		// taker buys 100 EURT: 1 EURT fee, 1 to protocol
 		vm.prank(user2);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, address(0));
 		vm.prank(user3);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, address(0));
 		assertEq(EURT.balanceOf(user3), 99e6);
 		assertEq(USDC.balanceOf(user2), 100e6);
-		assertEq(EURT.balanceOf(protocolFeeReceiver), 0.5e6);
-		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(EURT)), 0.5e6);
-		assertEq(EURT.balanceOf(bank), 0.5e6);
+		assertEq(EURT.balanceOf(protocolFeeReceiver), 1e6);
+		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(EURT)), 0);
+		assertEq(EURT.balanceOf(bank), 0);
 
-		// taker sells 100 EURT: 1 USDC fee, 0.5 to protocol, 0.5 held for address(0)
+		// taker sells 100 EURT: 1 USDC fee, 1 to protocol
 		vm.prank(user3);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, address(0));
 		vm.prank(user2);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, address(0));
 		assertEq(USDC.balanceOf(user2), 199e6);
-		assertEq(USDC.balanceOf(protocolFeeReceiver), 0.5e6);
-		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(USDC)), 0.5e6);
-		assertEq(USDC.balanceOf(bank), 0.5e6);
+		assertEq(USDC.balanceOf(protocolFeeReceiver), 1e6);
+		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(USDC)), 0);
+		assertEq(USDC.balanceOf(bank), 0);
 	}
 
 	// With the protocol fee at 20% of the market fee, the referrer gets the other 80%
