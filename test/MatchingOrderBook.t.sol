@@ -30,7 +30,7 @@ contract MatchingOrderBookTest is Test {
 	// copies of the order book events so tests can check them with vm.expectEmit
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
 	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
-	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount);
+	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount, address sentTo);
 	event ProtocolFeeChanged(uint newPercent);
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, MatchingOrderBook.Side side, uint baseQuantity, uint price);
 	event OrderCanceled(uint indexed orderId);
@@ -1818,6 +1818,65 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.failedPaymentBalance(user3, bank, address(FRZ)), 0);
 	}
 
+	// A maker that is frozen for the payout token can't receive its parked payment at its own address, so it
+	// names a different address in sendTo. Only the owner of the parked balance can redirect it.
+	function testFrozenWithdrawFailedPaymentToDifferentAddress() public {
+		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
+		address recoveryWallet = address(0xC01D);
+		EURT.mint(user2, 100e6);
+		FRZ.mint(user3, 100e6);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+		vm.prank(user3);
+		FRZ.approve(address(orderBook), 100e18);
+
+		// user2's ask is filled while user2 is frozen, so its 100 FRZ is parked
+		vm.prank(user2);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6);
+		FRZ.freeze(user2);
+		vm.prank(user3);
+		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		assertEq(FRZ.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+
+		// withdrawing to the frozen address fails, with the default overload and with sendTo set to itself
+		vm.expectRevert("ERC20: recipient is frozen");
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
+		vm.expectRevert("ERC20: recipient is frozen");
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), user2);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+
+		// sendTo only chooses the destination. Nobody else can pull user2's parked balance, not even the
+		// address user2 is about to send it to.
+		vm.expectRevert("no failed payment balance for user+bank+token combo");
+		vm.prank(recoveryWallet);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), recoveryWallet);
+		vm.expectRevert("no failed payment balance for user+bank+token combo");
+		vm.prank(user3);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), user3);
+		assertEq(FRZ.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+
+		// still frozen, user2 withdraws to a different address and the full amount arrives there
+		assertTrue(FRZ.frozen(user2), "user2 is still frozen");
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit WithdrawFailedPayment(user2, bank, address(FRZ), 100e6, recoveryWallet);
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), recoveryWallet);
+		assertEq(FRZ.balanceOf(recoveryWallet), 100e6, "parked FRZ arrives at the sendTo address");
+		assertEq(FRZ.balanceOf(user2), 0);
+		assertEq(FRZ.balanceOf(bank), 0);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
+		assertEq(orderBook.failedPaymentBalance(recoveryWallet, bank, address(FRZ)), 0);
+
+		// the balance can only be withdrawn once
+		vm.expectRevert("no failed payment balance for user+bank+token combo");
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), recoveryWallet);
+	}
+
 	// Minimums are now at least 1, so a partial fill that would leave a 1 unit sell worth 0 quote refunds
 	// that unit to the maker instead of leaving zero-value dust on the book
 	function testDustOrderZeroQuoteFill() public {
@@ -3241,7 +3300,7 @@ contract MatchingOrderBookTest is Test {
 
 		FRZ.unfreeze(user2);
 		vm.expectEmit(true, true, true, true, address(orderBook));
-		emit WithdrawFailedPayment(user2, bank, address(FRZ), 100e6);
+		emit WithdrawFailedPayment(user2, bank, address(FRZ), 100e6, user2);
 		vm.prank(user2);
 		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 	}

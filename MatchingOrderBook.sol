@@ -102,7 +102,7 @@ contract MatchingOrderBook {
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
-	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount);
+	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount, address sentTo);
 	event ProtocolFeeChanged(uint newPercent);
 
 	constructor(address payable _protocolFeeReceiver, uint _protocolFeePercent) {
@@ -482,14 +482,20 @@ contract MatchingOrderBook {
 		reentrancyGuard = false;
 	}
 
+	// default withdrawFailedPayment withdraws to user address
 	function withdrawFailedPayment(address payable bankAddress, address token) public {
+		withdrawFailedPayment(bankAddress, token, msg.sender);
+	}
+
+	// optional sendTo argument allows sending to different addresses in case main address is frozen
+	function withdrawFailedPayment(address payable bankAddress, address token, address sendTo) public {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		uint amountToSend = failedPayments[msg.sender][bankAddress][token];
 		require(amountToSend > 0, "no failed payment balance for user+bank+token combo");
 		failedPayments[msg.sender][bankAddress][token] = 0;
-		emit WithdrawFailedPayment(msg.sender, bankAddress, token, amountToSend);
-		Bank(bankAddress).withdrawTo(msg.sender, token, amountToSend, true);
+		emit WithdrawFailedPayment(msg.sender, bankAddress, token, amountToSend, sendTo);
+		Bank(bankAddress).withdrawTo(sendTo, token, amountToSend, true);
 		reentrancyGuard = false;
 	}
 
