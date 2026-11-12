@@ -485,10 +485,12 @@ contract MatchingOrderBook {
 		}
 
 		if (side == Side.SELL) {
-			_payOrPark(marketDetails.bankAddress, sendTo, marketDetails.baseToken, order.baseQuantity);
+			Bank(marketDetails.bankAddress).withdrawTo(sendTo, marketDetails.baseToken, order.baseQuantity, true);
 		} else if (side == Side.BUY) {
 			uint quoteQuantity = order.baseQuantity * order.price / 10**marketDetails.baseTokenDecimals;
-			_payOrPark(marketDetails.bankAddress, sendTo, marketDetails.quoteToken, quoteQuantity);
+			if (quoteQuantity > 0) {
+				Bank(marketDetails.bankAddress).withdrawTo(sendTo, marketDetails.quoteToken, quoteQuantity, true);
+			}
 		}
 		emit OrderCanceled(orderId, sendTo);
 		reentrancyGuard = false;

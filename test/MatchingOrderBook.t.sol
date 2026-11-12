@@ -1635,23 +1635,29 @@ contract MatchingOrderBookTest is Test {
 		assertEq(PAY.balanceOf(bank), 0);
 	}
 
-	// Cancel refunds go through _payOrPark, so a re-entering canceller gets its refund parked
-	function testReentryOnCancelParksRefund() public {
+	// Cancel refunds are sent directly and are not parked. A canceller that re-enters from the token's receive
+	// hook hits the reentrancy guard, so the whole cancel reverts and the order stays in the book.
+	function testReentryOnCancelReverts() public {
 		(PayableERC20 PAY, bytes32 marketId, address bank, ReentrantReceiver attacker) = _setUpPayableMarket();
 		PAY.mint(address(attacker), 100e6);
 		uint128 bidId = attacker.placeOrder(MatchingOrderBook.Side.BUY, 100e6, 1e6);
 		assertEq(PAY.balanceOf(bank), 100e6);
 
 		attacker.setAttack(ReentrantReceiver.Attack.CANCEL_ORDER);
+		vm.expectRevert("malicious attack");
 		attacker.cancelOrder(MatchingOrderBook.Side.BUY, bidId);
 
-		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
-		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+		// nothing changed: the bid is still in the book, its PAY is still escrowed and nothing is parked
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), bidId);
 		assertEq(PAY.balanceOf(address(attacker)), 0);
 		assertEq(PAY.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 0);
 
+		// without the reentry the cancel goes through and the refund is delivered
 		attacker.setAttack(ReentrantReceiver.Attack.NONE);
-		attacker.withdrawFailedPayment(address(PAY));
+		attacker.cancelOrder(MatchingOrderBook.Side.BUY, bidId);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
 		assertEq(PAY.balanceOf(address(attacker)), 100e6);
 		assertEq(PAY.balanceOf(bank), 0);
 	}
@@ -1755,8 +1761,10 @@ contract MatchingOrderBookTest is Test {
 		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
 	}
 
-	// A frozen user can still cancel. The refund is parked and withdrawn after it is unfrozen.
-	function testFrozenCancelRefundParked() public {
+	// Cancel refunds are sent directly and are not parked. A frozen user's cancel to its own address reverts
+	// and the order stays in the book. It can cancel once unfrozen, or cancel to a different address with
+	// sendTo (see testFrozenCancelOrderSendToDifferentAddress).
+	function testFrozenCancelToOwnAddressReverts() public {
 		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
 		FRZ.mint(user2, 100e6);
 		vm.prank(user2);
@@ -1765,16 +1773,19 @@ contract MatchingOrderBookTest is Test {
 		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6, referrer);
 		FRZ.freeze(user2);
 
+		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(user2);
 		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId);
-		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6, "bid is still in the book");
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), bidId);
 		assertEq(FRZ.balanceOf(user2), 0);
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked");
 
 		FRZ.unfreeze(user2);
 		vm.prank(user2);
-		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
 		assertEq(FRZ.balanceOf(user2), 100e6);
 		assertEq(FRZ.balanceOf(bank), 0);
 		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
@@ -4002,8 +4013,9 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	// Attacker cancels one ETH ask and, from receive(), tries to cancel its second ask in the same call.
-	// The refund is parked and the second ask is left untouched.
-	function testNativeReentryOnCancelParksRefund() public {
+	// Cancel refunds are sent directly with unlimited gas and are not parked. The reentry hits the guard, so
+	// the ETH send fails, the whole cancel reverts and both asks are left untouched.
+	function testNativeReentryOnCancelReverts() public {
 		(bytes32 marketId, address payable bank, ReentrantNativeReceiver attacker) = _setUpNativeReentryMarket();
 		vm.deal(address(this), 2 ether);
 		uint128 firstAskId = attacker.placeOrder{value: 1e18}(MatchingOrderBook.Side.SELL, 1e18, 2000e6);
@@ -4012,21 +4024,24 @@ contract MatchingOrderBookTest is Test {
 
 		attacker.setTargetOrderId(secondAskId);
 		attacker.setAttack(ReentrantNativeReceiver.Attack.CANCEL_ORDER);
-		vm.expectEmit(true, true, true, true);
-		emit PaymentFailed(address(attacker), bank, address(0), 1e18);
+		vm.expectRevert("native token send to user failed");
 		attacker.cancelOrder(MatchingOrderBook.Side.SELL, firstAskId);
 
-		// first ask is gone, second ask survived the re-entered cancel, refund is parked
-		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, firstAskId).baseQuantity, 0);
+		// nothing changed: both asks are still in the book, their ETH is still escrowed and nothing is parked
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, firstAskId).baseQuantity, 1e18);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, secondAskId).baseQuantity, 1e18);
-		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), secondAskId);
-		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, secondAskId).previousOrderId, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), firstAskId);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, firstAskId).nextOrderId, secondAskId);
 		assertEq(address(attacker).balance, 0);
 		assertEq(bank.balance, 2e18);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
 
+		// without the reentry the cancel goes through and the refund is delivered
 		attacker.setAttack(ReentrantNativeReceiver.Attack.NONE);
-		attacker.withdrawFailedPayment();
+		attacker.cancelOrder(MatchingOrderBook.Side.SELL, firstAskId);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, firstAskId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), secondAskId);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, secondAskId).previousOrderId, 0);
 		assertEq(address(attacker).balance, 1e18);
 		assertEq(bank.balance, 1e18, "second ask's ETH is still escrowed");
 	}
@@ -4183,7 +4198,8 @@ contract MatchingOrderBookTest is Test {
 		assertEq(USDC.balanceOf(bank), 0);
 	}
 
-	// Safe posts a 1 ETH ask and cancels it. The escrowed ETH is refunded straight to the Safe.
+	// Safe posts a 1 ETH ask and cancels it. The escrowed ETH is refunded straight to the Safe. Cancel
+	// refunds are sent with unlimited gas, so this one does not depend on the 10k gas limit.
 	function testSafeWalletCancelRefundReceivesNative() public {
 		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
 		(address payable safe, ) = _deploySafeWallet();
@@ -4314,7 +4330,7 @@ contract MatchingOrderBookTest is Test {
 	}
 
 	// The case sendTo exists for: user2 is frozen for the quote token after bidding. Canceling to its own
-	// address would park the refund, canceling to another address delivers it straight away.
+	// address would revert, canceling to another address delivers the refund straight away.
 	function testFrozenCancelOrderSendToDifferentAddress() public {
 		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
 		FRZ.mint(user2, 100e6);
@@ -4334,11 +4350,9 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(FRZ)), 0, "nothing parked");
 	}
 
-	// This test pins down how cancelOrder behaves today when the payment to sendTo fails. It is a way for a
-	// user to lose funds, so if the contract is changed to prevent it this test should be flipped.
-	// If the payment to sendTo fails, the refund is parked for sendTo, not for the order's owner. The owner
-	// has given up its claim: only sendTo can withdraw it, and it can withdraw it to anywhere.
-	function testCancelOrderSendToFailedPaymentIsParkedForSendTo() public {
+	// If the payment to sendTo fails the whole cancel reverts. Nothing is parked for sendTo or for the owner,
+	// the order stays in the book, and the owner can cancel again to an address that can be paid.
+	function testCancelOrderSendToFailedPaymentReverts() public {
 		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
 		FRZ.mint(user2, 100e6);
 		vm.prank(user2);
@@ -4347,29 +4361,23 @@ contract MatchingOrderBookTest is Test {
 		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
 		FRZ.freeze(cancelRecipient);
 
-		vm.expectEmit(true, true, true, true, address(orderBook));
-		emit PaymentFailed(cancelRecipient, bank, address(FRZ), 100e6);
+		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(user2);
 		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, cancelRecipient);
 
-		// the order is gone, the FRZ is still in the bank, and the claim on it belongs to sendTo
-		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+		// nothing changed: the bid is still in the book, its FRZ is still escrowed and nothing is parked
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6, "bid is still in the book");
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), bidId);
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(FRZ)), 100e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
+		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(FRZ)), 0, "nothing parked for sendTo");
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked for the owner");
 
-		// the owner can't get it back
-		vm.expectRevert("no failed payment balance for user+bank+token combo");
+		// the owner still controls the order and cancels it to an address that can receive FRZ
 		vm.prank(user2);
-		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
-		vm.expectRevert("no failed payment balance for user+bank+token combo");
-		vm.prank(user2);
-		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), user2);
-
-		// sendTo can, and chooses where it goes
-		vm.prank(cancelRecipient);
-		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), user3);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, user3);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
 		assertEq(FRZ.balanceOf(user3), 100e6);
+		assertEq(FRZ.balanceOf(cancelRecipient), 0);
 		assertEq(FRZ.balanceOf(user2), 0);
 		assertEq(FRZ.balanceOf(bank), 0);
 	}
