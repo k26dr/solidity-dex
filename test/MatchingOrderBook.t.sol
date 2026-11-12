@@ -4203,4 +4203,212 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
 		assertEq(bank.balance, 0);
 	}
+
+	// ---------------------------------------------------------------------------------------------
+	// cancelOrder with a sendTo address. The order's owner can have the escrowed funds sent to a different
+	// address, for example because its own address is frozen for that token.
+	// ---------------------------------------------------------------------------------------------
+	address cancelRecipient = address(0xCA9CE1);
+
+	// Fee-free EURT / USDC market with every minimum at 1, and user2 approved for both tokens
+	function _setUpCancelSendToMarket() internal returns (bytes32 marketId, address bank) {
+		orderBook.createMarket(address(EURT), address(USDC), 1, 1, 1, 1, 0, 1);
+		marketId = orderBook.getMarketId(address(EURT), address(USDC), 1, 1, 1, 1, 0, 1);
+		bank = orderBook.getMarketDetails(marketId).bankAddress;
+		vm.prank(user2);
+		USDC.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		EURT.approve(address(orderBook), 100e18);
+	}
+
+	// user2 has a bid (escrows USDC) and an ask (escrows EURT) and cancels both to a different address.
+	// Only the owner of an order can do that.
+	function testCancelOrderSendToDifferentAddress() public {
+		(bytes32 marketId, address bank) = _setUpCancelSendToMarket();
+		USDC.mint(user2, 100e6);
+		EURT.mint(user2, 50e6);
+		// bid 100 EURT at 1 USDC escrows 100 USDC, ask 50 EURT at 2 USDC escrows 50 EURT
+		vm.prank(user2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		vm.prank(user2);
+		uint128 askId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 50e6, 2e6);
+		assertEq(USDC.balanceOf(bank), 100e6);
+		assertEq(EURT.balanceOf(bank), 50e6);
+
+		// nobody else can cancel user2's order, not even by naming themselves or the same recipient
+		vm.expectRevert("users can only cancel their own order / order may not exist");
+		vm.prank(user3);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, user3);
+		vm.expectRevert("users can only cancel their own order / order may not exist");
+		vm.prank(cancelRecipient);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, cancelRecipient);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6);
+		assertEq(USDC.balanceOf(bank), 100e6);
+
+		// the bid's USDC goes to the recipient, not to user2
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderCanceled(bidId, cancelRecipient);
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, cancelRecipient);
+		assertEq(USDC.balanceOf(cancelRecipient), 100e6, "escrowed USDC arrives at the sendTo address");
+		assertEq(USDC.balanceOf(user2), 0);
+		assertEq(USDC.balanceOf(bank), 0);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+
+		// the ask's EURT goes to the recipient too
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderCanceled(askId, cancelRecipient);
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, askId, cancelRecipient);
+		assertEq(EURT.balanceOf(cancelRecipient), 50e6, "escrowed EURT arrives at the sendTo address");
+		assertEq(EURT.balanceOf(user2), 0);
+		assertEq(EURT.balanceOf(bank), 0);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
+
+		// both payments were delivered, so nothing is parked for anyone
+		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(USDC)), 0);
+		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(EURT)), 0);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 0);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(EURT)), 0);
+
+		// an order can only be canceled once
+		vm.expectRevert("users can only cancel their own order / order may not exist");
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, cancelRecipient);
+	}
+
+	// The default overload still refunds the owner, and reports the owner as sentTo
+	function testCancelOrderDefaultStillRefundsOwner() public {
+		(bytes32 marketId, address bank) = _setUpCancelSendToMarket();
+		USDC.mint(user2, 100e6);
+		vm.prank(user2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderCanceled(bidId, user2);
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId);
+		assertEq(USDC.balanceOf(user2), 100e6);
+		assertEq(USDC.balanceOf(bank), 0);
+	}
+
+	// Native token escrow can be redirected the same way
+	function testNativeCancelOrderSendToDifferentAddress() public {
+		(bytes32 marketId, address payable bank) = _setUpNativeBaseMarket();
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+		assertEq(bank.balance, 1e18);
+
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit OrderCanceled(askId, cancelRecipient);
+		vm.prank(ethUser1);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, askId, cancelRecipient);
+		assertEq(cancelRecipient.balance, 1e18, "escrowed ETH arrives at the sendTo address");
+		assertEq(ethUser1.balance, 10 ether - 1e18);
+		assertEq(bank.balance, 0);
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
+		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(0)), 0);
+		assertEq(orderBook.failedPaymentBalance(ethUser1, bank, address(0)), 0);
+	}
+
+	// The case sendTo exists for: user2 is frozen for the quote token after bidding. Canceling to its own
+	// address would park the refund, canceling to another address delivers it straight away.
+	function testFrozenCancelOrderSendToDifferentAddress() public {
+		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
+		FRZ.mint(user2, 100e6);
+		vm.prank(user2);
+		FRZ.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		FRZ.freeze(user2);
+
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, cancelRecipient);
+		assertEq(FRZ.balanceOf(cancelRecipient), 100e6, "refund arrives at the sendTo address");
+		assertEq(FRZ.balanceOf(user2), 0);
+		assertEq(FRZ.balanceOf(bank), 0);
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked");
+		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(FRZ)), 0, "nothing parked");
+	}
+
+	// This test pins down how cancelOrder behaves today when the payment to sendTo fails. It is a way for a
+	// user to lose funds, so if the contract is changed to prevent it this test should be flipped.
+	// If the payment to sendTo fails, the refund is parked for sendTo, not for the order's owner. The owner
+	// has given up its claim: only sendTo can withdraw it, and it can withdraw it to anywhere.
+	function testCancelOrderSendToFailedPaymentIsParkedForSendTo() public {
+		(FreezableERC20 FRZ, bytes32 marketId, address bank) = _setUpFreezableMarket();
+		FRZ.mint(user2, 100e6);
+		vm.prank(user2);
+		FRZ.approve(address(orderBook), 100e18);
+		vm.prank(user2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		FRZ.freeze(cancelRecipient);
+
+		vm.expectEmit(true, true, true, true, address(orderBook));
+		emit PaymentFailed(cancelRecipient, bank, address(FRZ), 100e6);
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, cancelRecipient);
+
+		// the order is gone, the FRZ is still in the bank, and the claim on it belongs to sendTo
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
+		assertEq(FRZ.balanceOf(bank), 100e6);
+		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
+
+		// the owner can't get it back
+		vm.expectRevert("no failed payment balance for user+bank+token combo");
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ));
+		vm.expectRevert("no failed payment balance for user+bank+token combo");
+		vm.prank(user2);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), user2);
+
+		// sendTo can, and chooses where it goes
+		vm.prank(cancelRecipient);
+		orderBook.withdrawFailedPayment(payable(bank), address(FRZ), user3);
+		assertEq(FRZ.balanceOf(user3), 100e6);
+		assertEq(FRZ.balanceOf(user2), 0);
+		assertEq(FRZ.balanceOf(bank), 0);
+	}
+
+	// sendTo can't be address(0). The cancel reverts and the order and its escrow are left untouched, for an
+	// ERC20 refund and for a native refund. The owner can still cancel normally afterwards.
+	function testCancelOrderSendToZeroAddressFails() public {
+		(bytes32 marketId, address bank) = _setUpCancelSendToMarket();
+		USDC.mint(user2, 100e6);
+		vm.prank(user2);
+		uint128 bidId = orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
+		vm.expectRevert("cannot send canceled funds to empty address");
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId, address(0));
+		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6, "bid is still in the book");
+		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), bidId);
+		assertEq(USDC.balanceOf(bank), 100e6, "USDC is still escrowed");
+		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(USDC)), 0, "nothing parked for address(0)");
+
+		(bytes32 nativeMarketId, address payable nativeBank) = _setUpNativeBaseMarket();
+		uint zeroBalanceBefore = address(0).balance;
+		vm.prank(ethUser1);
+		uint128 askId = orderBook.placeOrder{value: 1e18}(nativeMarketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
+		vm.expectRevert("cannot send canceled funds to empty address");
+		vm.prank(ethUser1);
+		orderBook.cancelOrder(nativeMarketId, MatchingOrderBook.Side.SELL, askId, address(0));
+		assertEq(orderBook.getOrder(nativeMarketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 1e18, "ask is still in the book");
+		assertEq(orderBook.getFirstOrderId(nativeMarketId, MatchingOrderBook.Side.SELL), askId);
+		assertEq(nativeBank.balance, 1e18, "ETH is still escrowed");
+		assertEq(address(0).balance, zeroBalanceBefore, "no ETH was sent to address(0)");
+
+		// the rejected cancels changed nothing, so the owners can still cancel and are refunded in full
+		vm.prank(user2);
+		orderBook.cancelOrder(marketId, MatchingOrderBook.Side.BUY, bidId);
+		assertEq(USDC.balanceOf(user2), 100e6);
+		assertEq(USDC.balanceOf(bank), 0);
+		vm.prank(ethUser1);
+		orderBook.cancelOrder(nativeMarketId, MatchingOrderBook.Side.SELL, askId);
+		assertEq(ethUser1.balance, 10 ether);
+		assertEq(nativeBank.balance, 0);
+	}
 }

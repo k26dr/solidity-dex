@@ -460,11 +460,16 @@ contract MatchingOrderBook {
 		cancelOrder(marketId, side, orderId, msg.sender);
 	}
 
-	// the optional sendTo address allows canceled funds to be sent to someone other than the user
-	// in case there is some kind of security issue with the main wallet
+	// the optional sendTo address allows canceled funds to be sent to someone other than the canceling user
+	// for 99% of use cases, cancelOrder without a custom sendTo address should be sufficient 
+	// using the sendTo version adds risk that an improper address is inserted into the sendTo field
+	// The sendTo functionality is included so that the cancel functionality can be censorship-resistant for any user
+	// where an issuing authority decides to freeze a user's address for their token
+	// Outside of that, there is very little reason to use it
 	function cancelOrder(bytes32 marketId, Side side, uint128 orderId, address sendTo) public {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
+		require(sendTo != address(0), "cannot send canceled funds to empty address");
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
 		Order memory order = orders[marketId][side][orderId];
 		require(msg.sender == order.user, "users can only cancel their own order / order may not exist");
@@ -498,6 +503,7 @@ contract MatchingOrderBook {
 	function withdrawFailedPayment(address payable bankAddress, address token, address sendTo) public {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
+		require(sendTo != address(0), "cannot withdraw funds to empty address");
 		uint amountToSend = failedPayments[msg.sender][bankAddress][token];
 		require(amountToSend > 0, "no failed payment balance for user+bank+token combo");
 		failedPayments[msg.sender][bankAddress][token] = 0;
