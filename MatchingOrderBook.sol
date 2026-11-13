@@ -91,9 +91,9 @@ contract MatchingOrderBook {
 	// Need to track failed payments so users can get a refund later without bricking the book 
 	mapping(address => mapping(address => mapping(address => uint))) failedPayments; // user -> bankAddress -> token -> amount
 	uint128 public orderCounter = 0; // order counter increments before being saved so the first order ID saved will be 1
-	address payable protocolFeeReceiver;
-	uint protocolFeePercent = 50; // Protocol fee as a percent of market fee. MAX 50.
-	bool protocolFeeLocked = false; // If protocolFeeReceiver address gets hacked, this variable can be set to lock the protocol fee at 0
+	address payable public protocolFeeReceiver;
+	uint public protocolFeePercent = 50; // Protocol fee as a percent of market fee. MAX 50.
+	bool public protocolFeeLocked = false; // If protocolFeeReceiver address gets hacked, this variable can be set to lock the protocol fee at 0
 	bool reentrancyGuard = false;
 
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
