@@ -30,7 +30,7 @@ contract MatchingOrderBookTest is Test {
 	// copies of the order book events so tests can check them with vm.expectEmit
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
 	event PaymentParked(address indexed user, address indexed bank, address indexed token, uint amount);
-	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount, address sentTo);
+	event WithdrawParked(address indexed user, address indexed bank, address indexed token, uint amount, address sentTo);
 	event ProtocolFeeChanged(uint newPercent);
 	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, MatchingOrderBook.Side side, uint baseQuantity, uint price, bool park);
 	event OrderCanceled(uint indexed orderId, address sentTo);
@@ -1582,7 +1582,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(EURT.balanceOf(user2), 100e6);
 		assertEq(PAY.balanceOf(address(attacker)), 0);
 		assertEq(PAY.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
 
 		// the re-entered placeOrder was rejected, so no order was created by it
 		assertEq(orderBook.orderCounter(), counterBefore);
@@ -1599,7 +1599,7 @@ contract MatchingOrderBookTest is Test {
 		attacker.withdrawParkedFunds(address(PAY));
 		assertEq(PAY.balanceOf(address(attacker)), 100e6);
 		assertEq(PAY.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 0);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(PAY)), 0);
 	}
 
 	// Maker payouts go through _payOrPark, so a re-entering maker cannot block the taker and its payment is parked
@@ -1652,7 +1652,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), bidId);
 		assertEq(PAY.balanceOf(address(attacker)), 0);
 		assertEq(PAY.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 0);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(PAY)), 0);
 
 		// without the reentry the cancel goes through and the refund is delivered
 		attacker.setAttack(ReentrantReceiver.Attack.NONE);
@@ -1740,14 +1740,14 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
 		assertEq(FRZ.balanceOf(user2), 0);
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 100e6);
 
 		// withdrawing while still frozen fails and keeps the parked balance
 		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ));
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 100e6);
 
 		// once unfrozen the maker withdraws the full amount, and only once
 		FRZ.unfreeze(user2);
@@ -1755,7 +1755,7 @@ contract MatchingOrderBookTest is Test {
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ));
 		assertEq(FRZ.balanceOf(user2), 100e6);
 		assertEq(FRZ.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 0);
 		vm.expectRevert("no failed payment balance for user+bank+token combo");
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ));
@@ -1780,7 +1780,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), bidId);
 		assertEq(FRZ.balanceOf(user2), 0);
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked");
 
 		FRZ.unfreeze(user2);
 		vm.prank(user2);
@@ -1788,7 +1788,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
 		assertEq(FRZ.balanceOf(user2), 100e6);
 		assertEq(FRZ.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 0);
 	}
 
 	// Taker payouts also go through _payOrPark, so a frozen taker's trade still fills and its payment is parked
@@ -1813,20 +1813,20 @@ contract MatchingOrderBookTest is Test {
 		assertEq(EURT.balanceOf(user3), 0);
 		assertEq(FRZ.balanceOf(user3), 0);
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(FRZ)), 100e6);
 
 		// withdrawing while still frozen reverts and keeps the balance parked
 		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(user3);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ));
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(FRZ)), 100e6);
 
 		FRZ.unfreeze(user3);
 		vm.prank(user3);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ));
 		assertEq(FRZ.balanceOf(user3), 100e6);
 		assertEq(FRZ.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(FRZ)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(FRZ)), 0);
 	}
 
 	// A maker that is frozen for the payout token can't receive its parked payment at its own address, so it
@@ -1848,7 +1848,7 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 100e6, 1e6);
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 100e6);
 
 		// withdrawing to the frozen address fails, with the default overload and with sendTo set to itself
 		vm.expectRevert("ERC20: recipient is frozen");
@@ -1857,7 +1857,7 @@ contract MatchingOrderBookTest is Test {
 		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ), user2);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 100e6);
 
 		// sendTo only chooses the destination. Nobody else can pull user2's parked balance, not even the
 		// address user2 is about to send it to.
@@ -1868,19 +1868,19 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ), user3);
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 100e6);
 
 		// still frozen, user2 withdraws to a different address and the full amount arrives there
 		assertTrue(FRZ.frozen(user2), "user2 is still frozen");
 		vm.expectEmit(true, true, true, true, address(orderBook));
-		emit WithdrawFailedPayment(user2, bank, address(FRZ), 100e6, recoveryWallet);
+		emit WithdrawParked(user2, bank, address(FRZ), 100e6, recoveryWallet);
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ), recoveryWallet);
 		assertEq(FRZ.balanceOf(recoveryWallet), 100e6, "parked FRZ arrives at the sendTo address");
 		assertEq(FRZ.balanceOf(user2), 0);
 		assertEq(FRZ.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0);
-		assertEq(orderBook.failedPaymentBalance(recoveryWallet, bank, address(FRZ)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 0);
+		assertEq(orderBook.parkedPaymentBalance(recoveryWallet, bank, address(FRZ)), 0);
 
 		// the balance can only be withdrawn once
 		vm.expectRevert("no failed payment balance for user+bank+token combo");
@@ -2195,7 +2195,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(EURT.balanceOf(user2), 100e6);
 		assertEq(PAY.balanceOf(address(attacker)), 0);
 		assertEq(PAY.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
 	}
 
 	function testConstructorProtocolFeeOver50Reverts() public {
@@ -2235,8 +2235,8 @@ contract MatchingOrderBookTest is Test {
 		assertEq(USDC.balanceOf(referrer), 1e6);
 
 		// nothing is held for address(0) and the bank is empty
-		assertEq(book.failedPaymentBalance(address(0), bank, address(EURT)), 0);
-		assertEq(book.failedPaymentBalance(address(0), bank, address(USDC)), 0);
+		assertEq(book.parkedPaymentBalance(address(0), bank, address(EURT)), 0);
+		assertEq(book.parkedPaymentBalance(address(0), bank, address(USDC)), 0);
 		assertEq(USDC.balanceOf(address(0)), 0);
 		assertEq(EURT.balanceOf(address(0)), 0);
 		assertEq(EURT.balanceOf(bank), 0);
@@ -2604,8 +2604,8 @@ contract MatchingOrderBookTest is Test {
 		assertLt(gasUsed, 1_000_000);
 		assertEq(EURT.balanceOf(user2), 100e6);
 		// the maker's 100 PAY was either delivered or parked for withdrawal, never lost
-		assertEq(PAY.balanceOf(address(attacker)) + orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
-		assertEq(PAY.balanceOf(bank), orderBook.failedPaymentBalance(address(attacker), bank, address(PAY)));
+		assertEq(PAY.balanceOf(address(attacker)) + orderBook.parkedPaymentBalance(address(attacker), bank, address(PAY)), 100e6);
+		assertEq(PAY.balanceOf(bank), orderBook.parkedPaymentBalance(address(attacker), bank, address(PAY)));
 	}
 
 	// 20 sells at prices 1..20, then insert with a hint near the back of the book
@@ -2951,21 +2951,21 @@ contract MatchingOrderBookTest is Test {
 		assertEq(EURT.balanceOf(user3), 100e6);
 		assertEq(FRZ.balanceOf(protocolFeeReceiver), 0.5e6);
 		assertEq(FRZ.balanceOf(frozenReferrer), 0);
-		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0.5e6);
+		assertEq(orderBook.parkedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0.5e6);
 		assertEq(FRZ.balanceOf(bank), 0.5e6);
 
 		// still frozen: withdraw fails and the held balance stays
 		vm.expectRevert("ERC20: recipient is frozen");
 		vm.prank(frozenReferrer);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ));
-		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0.5e6);
+		assertEq(orderBook.parkedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0.5e6);
 
 		// unfrozen: referrer withdraws the full share
 		FRZ.unfreeze(frozenReferrer);
 		vm.prank(frozenReferrer);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ));
 		assertEq(FRZ.balanceOf(frozenReferrer), 0.5e6);
-		assertEq(orderBook.failedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0);
+		assertEq(orderBook.parkedPaymentBalance(frozenReferrer, bank, address(FRZ)), 0);
 		assertEq(FRZ.balanceOf(bank), 0);
 	}
 
@@ -3013,7 +3013,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(EURT.balanceOf(user3), 99e6);
 		assertEq(USDC.balanceOf(user2), 100e6);
 		assertEq(EURT.balanceOf(protocolFeeReceiver), 1e6);
-		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(EURT)), 0);
+		assertEq(orderBook.parkedPaymentBalance(address(0), bank, address(EURT)), 0);
 		assertEq(EURT.balanceOf(bank), 0);
 
 		// taker sells 100 EURT: 1 USDC fee, 1 to protocol
@@ -3023,7 +3023,7 @@ contract MatchingOrderBookTest is Test {
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, address(0));
 		assertEq(USDC.balanceOf(user2), 199e6);
 		assertEq(USDC.balanceOf(protocolFeeReceiver), 1e6);
-		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(USDC)), 0);
+		assertEq(orderBook.parkedPaymentBalance(address(0), bank, address(USDC)), 0);
 		assertEq(USDC.balanceOf(bank), 0);
 	}
 
@@ -3287,7 +3287,7 @@ contract MatchingOrderBookTest is Test {
 		orderBook.endProtocolFee();
 	}
 
-	// A payment to a frozen maker emits PaymentParked, and withdrawing it later emits WithdrawFailedPayment
+	// A payment to a frozen maker emits PaymentParked, and withdrawing it later emits WithdrawParked
 	function testPaymentParkedAndWithdrawEvents() public {
 		FreezableERC20 FRZ = new FreezableERC20("FRZ", "Freezable Token", 6);
 		orderBook.createMarket(address(EURT), address(FRZ), 1, 1, 1, 1, 0, 1);
@@ -3311,7 +3311,7 @@ contract MatchingOrderBookTest is Test {
 
 		FRZ.unfreeze(user2);
 		vm.expectEmit(true, true, true, true, address(orderBook));
-		emit WithdrawFailedPayment(user2, bank, address(FRZ), 100e6, user2);
+		emit WithdrawParked(user2, bank, address(FRZ), 100e6, user2);
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(payable(bank), address(FRZ));
 	}
@@ -3956,7 +3956,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(address(attacker).balance, 0);
 		assertEq(bank.balance, 1e18);
 		assertEq(USDC.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(0)), 1e18);
 
 		// the re-entered placeOrder was rejected, so no order was created by it
 		assertEq(orderBook.orderCounter(), counterBefore);
@@ -3968,14 +3968,14 @@ contract MatchingOrderBookTest is Test {
 		vm.expectRevert("native token send to user failed");
 		attacker.withdrawParkedFunds();
 		assertEq(bank.balance, 1e18);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(0)), 1e18);
 
 		// the guard is released, so an honest withdraw recovers the parked ETH exactly once
 		attacker.setAttack(ReentrantNativeReceiver.Attack.NONE);
 		attacker.withdrawParkedFunds();
 		assertEq(address(attacker).balance, 1e18);
 		assertEq(bank.balance, 0);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(0)), 0);
 		vm.expectRevert("no failed payment balance for user+bank+token combo");
 		attacker.withdrawParkedFunds();
 	}
@@ -4002,7 +4002,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(address(attacker).balance, 0);
 		assertEq(bank.balance, 1e18);
 		assertEq(USDC.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(0)), 1e18);
 		assertEq(orderBook.orderCounter(), counterBefore);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
 
@@ -4034,7 +4034,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, firstAskId).nextOrderId, secondAskId);
 		assertEq(address(attacker).balance, 0);
 		assertEq(bank.balance, 2e18);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(0)), 0);
 
 		// without the reentry the cancel goes through and the refund is delivered
 		attacker.setAttack(ReentrantNativeReceiver.Attack.NONE);
@@ -4070,7 +4070,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6);
 		assertEq(bank.balance, 1e18);
 		assertEq(USDC.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 1e18);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(0)), 1e18);
 
 		// withdrawing with the attack still on: the reentry hits the guard, is swallowed, and the ETH arrives
 		attacker.withdrawParkedFunds();
@@ -4079,7 +4079,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
 		assertEq(address(attacker).balance, 1e18);
 		assertEq(bank.balance, 0);
-		assertEq(orderBook.failedPaymentBalance(address(attacker), bank, address(0)), 0);
+		assertEq(orderBook.parkedPaymentBalance(address(attacker), bank, address(0)), 0);
 	}
 
 	// ---------------------------------------------------------------------------------------------
@@ -4143,7 +4143,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 0);
 
 		assertEq(safe.balance, 1e18, "ETH arrives in the Safe");
-		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
+		assertEq(orderBook.parkedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
 		assertEq(USDC.balanceOf(ethUser1), 10000e6 + 2000e6 - 2e6, "taker gets USDC minus 0.1% fee");
 		assertEq(bank.balance, 0);
 		assertEq(USDC.balanceOf(bank), 0);
@@ -4166,7 +4166,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
 
 		assertEq(safe.balance, 0.999e18, "ETH minus 0.1% fee arrives in the Safe");
-		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
+		assertEq(orderBook.parkedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
 		assertEq(USDC.balanceOf(safe), 0);
 		assertEq(ethReferrer.balance, 0.0005e18);
 		assertEq(protocolFeeReceiver.balance, 0.0005e18);
@@ -4190,9 +4190,9 @@ contract MatchingOrderBookTest is Test {
 		assertEq(bidId, 0, "taker fully filled, nothing posted");
 
 		assertEq(safe.balance, 0.01e18, "only the fill price is spent, the rest comes back to the Safe");
-		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
+		assertEq(orderBook.parkedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
 		assertEq(USDC.balanceOf(safe), 100e6 - 0.1e6, "Safe gets USDC minus 0.1% fee");
-		assertEq(orderBook.failedPaymentBalance(safe, bank, address(USDC)), 0);
+		assertEq(orderBook.parkedPaymentBalance(safe, bank, address(USDC)), 0);
 		assertEq(ethUser1.balance, 10 ether + 0.05e18, "maker receives the ETH");
 		assertEq(bank.balance, 0);
 		assertEq(USDC.balanceOf(bank), 0);
@@ -4216,7 +4216,7 @@ contract MatchingOrderBookTest is Test {
 
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
 		assertEq(safe.balance, 1e18, "refund arrives in the Safe");
-		assertEq(orderBook.failedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
+		assertEq(orderBook.parkedPaymentBalance(safe, bank, address(0)), 0, "nothing parked");
 		assertEq(bank.balance, 0);
 	}
 
@@ -4284,10 +4284,10 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
 
 		// both payments were delivered, so nothing is parked for anyone
-		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(USDC)), 0);
-		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(EURT)), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(EURT)), 0);
+		assertEq(orderBook.parkedPaymentBalance(cancelRecipient, bank, address(USDC)), 0);
+		assertEq(orderBook.parkedPaymentBalance(cancelRecipient, bank, address(EURT)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(EURT)), 0);
 
 		// an order can only be canceled once
 		vm.expectRevert("users can only cancel their own order / order may not exist");
@@ -4325,8 +4325,8 @@ contract MatchingOrderBookTest is Test {
 		assertEq(ethUser1.balance, 10 ether - 1e18);
 		assertEq(bank.balance, 0);
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.SELL, askId).baseQuantity, 0);
-		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(0)), 0);
-		assertEq(orderBook.failedPaymentBalance(ethUser1, bank, address(0)), 0);
+		assertEq(orderBook.parkedPaymentBalance(cancelRecipient, bank, address(0)), 0);
+		assertEq(orderBook.parkedPaymentBalance(ethUser1, bank, address(0)), 0);
 	}
 
 	// The case sendTo exists for: user2 is frozen for the quote token after bidding. Canceling to its own
@@ -4346,8 +4346,8 @@ contract MatchingOrderBookTest is Test {
 		assertEq(FRZ.balanceOf(user2), 0);
 		assertEq(FRZ.balanceOf(bank), 0);
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked");
-		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(FRZ)), 0, "nothing parked");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked");
+		assertEq(orderBook.parkedPaymentBalance(cancelRecipient, bank, address(FRZ)), 0, "nothing parked");
 	}
 
 	// If the payment to sendTo fails the whole cancel reverts. Nothing is parked for sendTo or for the owner,
@@ -4369,8 +4369,8 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6, "bid is still in the book");
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), bidId);
 		assertEq(FRZ.balanceOf(bank), 100e6);
-		assertEq(orderBook.failedPaymentBalance(cancelRecipient, bank, address(FRZ)), 0, "nothing parked for sendTo");
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked for the owner");
+		assertEq(orderBook.parkedPaymentBalance(cancelRecipient, bank, address(FRZ)), 0, "nothing parked for sendTo");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(FRZ)), 0, "nothing parked for the owner");
 
 		// the owner still controls the order and cancels it to an address that can receive FRZ
 		vm.prank(user2);
@@ -4395,7 +4395,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, MatchingOrderBook.Side.BUY, bidId).baseQuantity, 100e6, "bid is still in the book");
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.BUY), bidId);
 		assertEq(USDC.balanceOf(bank), 100e6, "USDC is still escrowed");
-		assertEq(orderBook.failedPaymentBalance(address(0), bank, address(USDC)), 0, "nothing parked for address(0)");
+		assertEq(orderBook.parkedPaymentBalance(address(0), bank, address(USDC)), 0, "nothing parked for address(0)");
 
 		(bytes32 nativeMarketId, address payable nativeBank) = _setUpNativeBaseMarket();
 		uint zeroBalanceBefore = address(0).balance;
@@ -4462,7 +4462,7 @@ contract MatchingOrderBookTest is Test {
 		emit OrderPlaced(orderBook.orderCounter() + 1, user2, marketId, SELL, 100e6, 1e6, true);
 		uint128 askId = _placeParked(marketId, user2, SELL, 100e6, 1e6);
 		assertTrue(orderBook.getOrder(marketId, SELL, askId).park, "park is stored on the order");
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 0);
 
 		// the taker buys all 100 EURT. PaymentParked is the event that records a parked payment.
 		vm.expectEmit(true, true, true, true, address(orderBook));
@@ -4472,17 +4472,17 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, SELL, askId).baseQuantity, 0, "ask is fully filled");
 		assertEq(USDC.balanceOf(user2), 0, "maker was not sent its USDC");
 		assertEq(USDC.balanceOf(bank), 100e6, "maker's USDC stays in the bank");
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 100e6, "maker's USDC is parked");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 100e6, "maker's USDC is parked");
 		assertEq(EURT.balanceOf(user3), 100e6, "taker is paid directly");
 		assertEq(EURT.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(EURT)), 0, "nothing is parked for the taker");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(EURT)), 0, "nothing is parked for the taker");
 
 		// the maker withdraws its parked USDC, and only once
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(bank, address(USDC));
 		assertEq(USDC.balanceOf(user2), 100e6);
 		assertEq(USDC.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 0);
 		vm.expectRevert("no failed payment balance for user+bank+token combo");
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(bank, address(USDC));
@@ -4505,20 +4505,20 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, BUY, bidId).baseQuantity, 0, "bid is fully filled");
 		assertEq(EURT.balanceOf(user2), 0, "maker was not sent its EURT");
 		assertEq(EURT.balanceOf(bank), 100e6, "maker's EURT stays in the bank");
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(EURT)), 100e6, "maker's EURT is parked");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(EURT)), 100e6, "maker's EURT is parked");
 		assertEq(USDC.balanceOf(user3), 100e6, "taker is paid directly");
 		assertEq(USDC.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(USDC)), 0, "nothing is parked for the taker");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(USDC)), 0, "nothing is parked for the taker");
 
 		// parked funds can be withdrawn to any address
 		vm.expectEmit(true, true, true, true, address(orderBook));
-		emit WithdrawFailedPayment(user2, bank, address(EURT), 100e6, parkRecipient);
+		emit WithdrawParked(user2, bank, address(EURT), 100e6, parkRecipient);
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(bank, address(EURT), parkRecipient);
 		assertEq(EURT.balanceOf(parkRecipient), 100e6);
 		assertEq(EURT.balanceOf(user2), 0);
 		assertEq(EURT.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(EURT)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(EURT)), 0);
 	}
 
 	// A taker buy with park=true that crosses two resting asks below its limit price. The EURT it bought and
@@ -4541,12 +4541,12 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderId, 0, "fully filled, nothing posted");
 		assertEq(EURT.balanceOf(user3), 0, "taker was not sent its EURT");
 		assertEq(USDC.balanceOf(user3), 80e6, "taker was not sent its USDC refund");
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(EURT)), 100e6, "taker's EURT is parked");
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(USDC)), 15e6, "taker's USDC refund is parked");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(EURT)), 100e6, "taker's EURT is parked");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(USDC)), 15e6, "taker's USDC refund is parked");
 		assertEq(EURT.balanceOf(bank), 100e6);
 		assertEq(USDC.balanceOf(bank), 15e6);
 		assertEq(USDC.balanceOf(user2), 105e6, "maker is paid directly");
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 0, "nothing is parked for the maker");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 0, "nothing is parked for the maker");
 
 		// each token is withdrawn separately
 		vm.prank(user3);
@@ -4575,12 +4575,12 @@ contract MatchingOrderBookTest is Test {
 		uint128 orderId = orderBook.placeOrderWithHint(marketId, MatchingOrderBook.Side.SELL, 100e6, 1e6, 0, true, true, referrer);
 		assertEq(orderId, 0, "fully filled, nothing posted");
 		assertEq(USDC.balanceOf(user3), 0, "taker was not sent its USDC");
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(USDC)), 99e6, "taker's net proceeds are parked");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(USDC)), 99e6, "taker's net proceeds are parked");
 		assertEq(USDC.balanceOf(bank), 99e6);
 		assertEq(USDC.balanceOf(referrer), 0.5e6, "referrer fee is sent out");
 		assertEq(USDC.balanceOf(protocolFeeReceiver), 0.5e6, "protocol fee is sent out");
-		assertEq(orderBook.failedPaymentBalance(referrer, bank, address(USDC)), 0);
-		assertEq(orderBook.failedPaymentBalance(protocolFeeReceiver, bank, address(USDC)), 0);
+		assertEq(orderBook.parkedPaymentBalance(referrer, bank, address(USDC)), 0);
+		assertEq(orderBook.parkedPaymentBalance(protocolFeeReceiver, bank, address(USDC)), 0);
 		assertEq(EURT.balanceOf(user2), 100e6, "maker is paid directly");
 		assertEq(EURT.balanceOf(bank), 0);
 
@@ -4605,8 +4605,8 @@ contract MatchingOrderBookTest is Test {
 		assertEq(USDC.balanceOf(bank), 100e6);
 		assertEq(USDC.balanceOf(user2), 0);
 		assertEq(EURT.balanceOf(user3), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 100e6, "maker's USDC is parked");
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(EURT)), 100e6, "taker's EURT is parked");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 100e6, "maker's USDC is parked");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(EURT)), 100e6, "taker's EURT is parked");
 
 		vm.prank(user2);
 		orderBook.withdrawParkedFunds(bank, address(USDC));
@@ -4633,7 +4633,7 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getOrder(marketId, BUY, bidId).baseQuantity, 60e6);
 		assertTrue(orderBook.getOrder(marketId, BUY, bidId).park, "leftover keeps park");
 		assertEq(EURT.balanceOf(user3), 0);
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(EURT)), 40e6, "taker fill is parked");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(EURT)), 40e6, "taker fill is parked");
 		assertEq(USDC.balanceOf(user2), 40e6);
 
 		// user2 sells into the leftover bid, which is now the maker
@@ -4641,7 +4641,7 @@ contract MatchingOrderBookTest is Test {
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.SELL, 60e6, 1e6);
 		assertEq(orderBook.getFirstOrderId(marketId, BUY), 0, "bid is fully filled");
 		assertEq(EURT.balanceOf(user3), 0);
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(EURT)), 100e6, "maker fill is added to the parked balance");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(EURT)), 100e6, "maker fill is added to the parked balance");
 		assertEq(EURT.balanceOf(bank), 100e6);
 		assertEq(USDC.balanceOf(user2), 100e6);
 		assertEq(USDC.balanceOf(bank), 0);
@@ -4667,8 +4667,8 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 10e6, 2e6);
 		assertEq(orderBook.getOrder(marketId, SELL, askId).baseQuantity, 15e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 20e6);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(EURT)), 0);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 20e6);
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(EURT)), 0);
 
 		// the second buy of 10 leaves 5 EURT, below the minimum: the ask is removed and its 5 EURT is parked
 		vm.expectEmit(true, true, true, true, address(orderBook));
@@ -4678,8 +4678,8 @@ contract MatchingOrderBookTest is Test {
 		vm.prank(user3);
 		orderBook.placeOrder(marketId, MatchingOrderBook.Side.BUY, 10e6, 2e6);
 		assertEq(orderBook.getFirstOrderId(marketId, SELL), 0, "dust ask is removed");
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 40e6, "both fills are parked");
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(EURT)), 5e6, "dust refund is parked");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 40e6, "both fills are parked");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(EURT)), 5e6, "dust refund is parked");
 		assertEq(USDC.balanceOf(user2), 0);
 		assertEq(EURT.balanceOf(user2), 0);
 		assertEq(USDC.balanceOf(bank), 40e6);
@@ -4711,8 +4711,8 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, MatchingOrderBook.Side.SELL), 0);
 		assertEq(USDC.balanceOf(user3), 0);
 		assertEq(EURT.balanceOf(user3), 0);
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(USDC)), 10e6, "proceeds are parked");
-		assertEq(orderBook.failedPaymentBalance(user3, bank, address(EURT)), 5e6, "unfilled EURT is parked");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(USDC)), 10e6, "proceeds are parked");
+		assertEq(orderBook.parkedPaymentBalance(user3, bank, address(EURT)), 5e6, "unfilled EURT is parked");
 		assertEq(USDC.balanceOf(bank), 10e6);
 		assertEq(EURT.balanceOf(bank), 5e6);
 		assertEq(EURT.balanceOf(user2), 10e6, "maker is paid directly");
@@ -4731,7 +4731,7 @@ contract MatchingOrderBookTest is Test {
 		orderBook.placeOrder{value: 1e18}(marketId, MatchingOrderBook.Side.SELL, 1e18, 2000e6);
 		assertEq(ethUser1.balance, 10 ether, "maker was not sent its ETH");
 		assertEq(bank.balance, 1e18, "maker's ETH stays in the bank");
-		assertEq(orderBook.failedPaymentBalance(ethUser1, bank, address(0)), 1e18, "maker's ETH is parked");
+		assertEq(orderBook.parkedPaymentBalance(ethUser1, bank, address(0)), 1e18, "maker's ETH is parked");
 		// the taker is paid 2000 USDC less the 0.1% fee
 		assertEq(USDC.balanceOf(ethUser2), 10000e6 + 1998e6, "taker is paid directly");
 		assertEq(USDC.balanceOf(bank), 0);
@@ -4740,7 +4740,7 @@ contract MatchingOrderBookTest is Test {
 		orderBook.withdrawParkedFunds(bank, address(0));
 		assertEq(ethUser1.balance, 11 ether);
 		assertEq(bank.balance, 0);
-		assertEq(orderBook.failedPaymentBalance(ethUser1, bank, address(0)), 0);
+		assertEq(orderBook.parkedPaymentBalance(ethUser1, bank, address(0)), 0);
 	}
 
 	// Native base market. A taker buys ETH with park=true: its ETH (less the 0.1% fee) is parked in the bank,
@@ -4755,10 +4755,10 @@ contract MatchingOrderBookTest is Test {
 		uint128 orderId = _placeParked(marketId, ethUser1, MatchingOrderBook.Side.BUY, 1e18, 2000e6);
 		assertEq(orderId, 0, "fully filled, nothing posted");
 		assertEq(ethUser1.balance, 10 ether, "taker was not sent its ETH");
-		assertEq(orderBook.failedPaymentBalance(ethUser1, bank, address(0)), 0.999e18, "taker's ETH less the fee is parked");
+		assertEq(orderBook.parkedPaymentBalance(ethUser1, bank, address(0)), 0.999e18, "taker's ETH less the fee is parked");
 		assertEq(bank.balance, 0.999e18);
 		assertEq(protocolFeeReceiver.balance, 0.001e18, "protocol fee is sent out");
-		assertEq(orderBook.failedPaymentBalance(protocolFeeReceiver, bank, address(0)), 0);
+		assertEq(orderBook.parkedPaymentBalance(protocolFeeReceiver, bank, address(0)), 0);
 		assertEq(USDC.balanceOf(ethUser2), 12000e6, "maker is paid directly");
 
 		vm.prank(ethUser1);
@@ -4782,6 +4782,6 @@ contract MatchingOrderBookTest is Test {
 		assertEq(orderBook.getFirstOrderId(marketId, BUY), 0);
 		assertEq(USDC.balanceOf(user2), 100e6, "escrow is sent back");
 		assertEq(USDC.balanceOf(bank), 0);
-		assertEq(orderBook.failedPaymentBalance(user2, bank, address(USDC)), 0, "nothing is parked");
+		assertEq(orderBook.parkedPaymentBalance(user2, bank, address(USDC)), 0, "nothing is parked");
 	}
 }

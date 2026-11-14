@@ -186,7 +186,7 @@ contract NativeMatchingOrderBookHandler is Test {
 		address actor = actors[actorSeed % actors.length];
 		bytes32 marketId = _market(nativeBase, withMinimums);
 		address payable bank = orderBook.getMarketDetails(marketId).bankAddress;
-		if (orderBook.failedPaymentBalance(actor, bank, address(0)) == 0) return;
+		if (orderBook.parkedPaymentBalance(actor, bank, address(0)) == 0) return;
 		vm.prank(actor);
 		orderBook.withdrawParkedFunds(bank, address(0));
 		withdrawCalls++;
@@ -288,10 +288,10 @@ contract NativeMatchingOrderBookInvariantTest is Test {
 		for (uint i = 0; i < 2; i++) {
 			address b = _bank(nativeBaseMarkets[i]);
 			address q = _bank(nativeQuoteMarkets[i]);
-			assertEq(orderBook.failedPaymentBalance(user, b, address(0)), 0);
-			assertEq(orderBook.failedPaymentBalance(user, b, address(USDC)), 0);
-			assertEq(orderBook.failedPaymentBalance(user, q, address(0)), 0);
-			assertEq(orderBook.failedPaymentBalance(user, q, address(USDC)), 0);
+			assertEq(orderBook.parkedPaymentBalance(user, b, address(0)), 0);
+			assertEq(orderBook.parkedPaymentBalance(user, b, address(USDC)), 0);
+			assertEq(orderBook.parkedPaymentBalance(user, q, address(0)), 0);
+			assertEq(orderBook.parkedPaymentBalance(user, q, address(USDC)), 0);
 		}
 	}
 
@@ -356,9 +356,9 @@ contract NativeMatchingOrderBookInvariantTest is Test {
 	// Total parked in one bank for one token, across everyone who can be paid: traders and the protocol fee receiver
 	function _parked(address bank, address token) internal view returns (uint total) {
 		for (uint i = 0; i < handler.actorCount(); i++) {
-			total += orderBook.failedPaymentBalance(handler.actors(i), bank, token);
+			total += orderBook.parkedPaymentBalance(handler.actors(i), bank, token);
 		}
-		total += orderBook.failedPaymentBalance(protocolFeeReceiver, bank, token);
+		total += orderBook.parkedPaymentBalance(protocolFeeReceiver, bank, token);
 	}
 
 	function _checkSide(bytes32 marketId, MatchingOrderBook.Side side) internal view {

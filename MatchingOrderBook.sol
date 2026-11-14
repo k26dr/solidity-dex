@@ -93,7 +93,7 @@ contract MatchingOrderBook {
 	mapping(bytes32 => mapping(Side => mapping(uint128 => Order))) orders; // marketId -> Side -> orderId -> Order
 	// Tokens can freeze addresses and that will cause sends to revert 
 	// Need to track failed payments so users can get a refund later without bricking the book 
-	mapping(address => mapping(address => mapping(address => uint))) failedPayments; // user -> bankAddress -> token -> amount
+	mapping(address => mapping(address => mapping(address => uint))) parkedPayments; // user -> bankAddress -> token -> amount
 	uint128 public orderCounter = 0; // order counter increments before being saved so the first order ID saved will be 1
 	address payable public protocolFeeReceiver;
 	uint public protocolFeePercent = 50; // Protocol fee as a percent of market fee. MAX 50.
@@ -106,7 +106,7 @@ contract MatchingOrderBook {
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
 	event PaymentParked(address indexed user, address indexed bank, address indexed token, uint amount);
-	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount, address sentTo);
+	event WithdrawParked(address indexed user, address indexed bank, address indexed token, uint amount, address sentTo);
 	event ProtocolFeeChanged(uint newPercent);
 
 	constructor(address payable _protocolFeeReceiver, uint _protocolFeePercent) {
@@ -516,10 +516,10 @@ contract MatchingOrderBook {
 		reentrancyGuard = true;
 		require(sendTo != address(0), "cannot withdraw funds to empty address");
 		require(sendTo != address(this), "cannot withdraw funds to orderbook");
-		uint amountToSend = failedPayments[msg.sender][bankAddress][token];
+		uint amountToSend = parkedPayments[msg.sender][bankAddress][token];
 		require(amountToSend > 0, "no failed payment balance for user+bank+token combo");
-		failedPayments[msg.sender][bankAddress][token] = 0;
-		emit WithdrawFailedPayment(msg.sender, bankAddress, token, amountToSend, sendTo);
+		parkedPayments[msg.sender][bankAddress][token] = 0;
+		emit WithdrawParked(msg.sender, bankAddress, token, amountToSend, sendTo);
 		Bank(bankAddress).withdrawTo(sendTo, token, amountToSend, true);
 		reentrancyGuard = false;
 	}
@@ -527,13 +527,13 @@ contract MatchingOrderBook {
 	function _payOrPark(address payable bank, address to, address token, uint amount, bool parkonly) internal {
 		if (amount == 0) return;
 		if (parkonly) {
-			failedPayments[to][bank][token] += amount;
+			parkedPayments[to][bank][token] += amount;
 			emit PaymentParked(to, bank, token, amount);
 		}
 		else {
 			try Bank(bank).withdrawTo{gas: 200e3}(to, token, amount, false) {}
 			catch {
-				failedPayments[to][bank][token] += amount;
+				parkedPayments[to][bank][token] += amount;
 				emit PaymentParked(to, bank, token, amount);
 			}
 		}
@@ -600,7 +600,7 @@ contract MatchingOrderBook {
 		return returnOrders;
 	}
 
-	function failedPaymentBalance(address user, address bank, address token) external view returns (uint) {
-		return failedPayments[user][bank][token];
+	function parkedPaymentBalance(address user, address bank, address token) external view returns (uint) {
+		return parkedPayments[user][bank][token];
 	}
 }
