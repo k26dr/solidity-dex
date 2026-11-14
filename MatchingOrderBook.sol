@@ -51,6 +51,7 @@ contract MatchingOrderBook {
 	}
 	struct Order {
 		address user;
+		bool park; // park a user's funds in the bank instead of sending it to the user on a fill
 		uint baseQuantity;
 		uint price;
 		uint128 nextOrderId;
@@ -78,6 +79,7 @@ contract MatchingOrderBook {
 		uint remainingMakerQuoteQuantity;
 		uint makerOrderPrice;
 		address maker;
+		bool makerPark;
 		uint fillBaseQuantity;
 		uint fillQuoteQuantity;
 		uint takerOwed;
@@ -96,7 +98,7 @@ contract MatchingOrderBook {
 	bool public protocolFeeLocked = false; // If protocolFeeReceiver address gets hacked, this variable can be set to lock the protocol fee at 0
 	bool reentrancyGuard = false;
 
-	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price);
+	event OrderPlaced(uint indexed orderId, address indexed user, bytes32 indexed markethash, Side side, uint baseQuantity, uint price, bool park);
 	event OrderCanceled(uint indexed orderId, address sentTo);
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price, address referrer);
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
@@ -160,19 +162,15 @@ contract MatchingOrderBook {
 		reentrancyGuard = false;
 	}
 
-	// For markets with no fee you can place orders without a referrer
+	// Simplest order type
+	// No referrer, no parking funds, no hints
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price) external payable returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, true, address(0));
+		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, true, false, address(0));
 	}
 
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
 	function placeOrder(bytes32 marketId, Side side, uint baseQuantity, uint price, address referrer) external payable returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, true, referrer);
-	}
-
-	// if you want to place an order with a hint and no referrer
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint) public payable returns (uint128 orderId) {
-		return placeOrderWithHint(marketId, side, baseQuantity, price, hintOrderId, revertOnBadHint, address(0));
+		return placeOrderWithHint(marketId, side, baseQuantity, price, 0, true, false, referrer);
 	}
 
 	// placeOrder function with hint
@@ -183,12 +181,16 @@ contract MatchingOrderBook {
 	// The recommended behavior for revertOnBadHint is true to save gas
 	// If you want to place hints on orders close to the front of a book (not that you necessarily should, front of the book orders can be run without a hint)
 	// you can set this to false as a convenience so that if the hint order gets filled, your order runs as a normal insert
+	// park=true lets you park funds by default instead of sending them to your address. this is useful for users who think authorities are trying to freeze their address. 
+	// parked funds can be withdrawn to any address, including smart contracts that convert your funds to ETH or a native token if you need to avoid seizure. 
+	// the majority of users can use park=false and be fine.
 	// referrer gets (100 - protocolFeePercent)% of any taker fee for the market
-	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint, address referrer) public payable returns (uint128 orderId) {
+	// you can set referrer=address(0) if you want the protocol to keep the whole fee or if the market has no fee
+	function placeOrderWithHint(bytes32 marketId, Side side, uint baseQuantity, uint price, uint128 hintOrderId, bool revertOnBadHint, bool park, address referrer) public payable returns (uint128 orderId) {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
-		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), 0, 0, 0, 0, 0);
+		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), false, 0, 0, 0, 0, 0);
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
 		require(baseQuantity >= marketDetails.baseOrderMin, "base quantity is below minimum");
 		require(price > 0, "zero price orders not permitted");
@@ -271,14 +273,14 @@ contract MatchingOrderBook {
 					placeOrderVars.takerFeeOwed += takerFee;
 					placeOrderVars.protocolFeeOwed += protocolFee;
 					placeOrderVars.takerOwed += placeOrderVars.fillQuoteQuantity - takerFee - protocolFee;
-					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, placeOrderVars.fillBaseQuantity);
+					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.baseToken, placeOrderVars.fillBaseQuantity, fillOrder.park);
 				} else {
 					uint takerFee = placeOrderVars.fillBaseQuantity * marketDetails.feeNumerator * (100 - protocolFeePercent) / marketDetails.feeDenominator / 100;
 					uint protocolFee = placeOrderVars.fillBaseQuantity * marketDetails.feeNumerator * protocolFeePercent / marketDetails.feeDenominator / 100;
 					placeOrderVars.takerFeeOwed += takerFee;
 					placeOrderVars.protocolFeeOwed += protocolFee;
 					placeOrderVars.takerOwed += placeOrderVars.fillBaseQuantity - takerFee - protocolFee;
-					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, placeOrderVars.fillQuoteQuantity);
+					_payOrPark(marketDetails.bankAddress, fillOrder.user, marketDetails.quoteToken, placeOrderVars.fillQuoteQuantity, fillOrder.park);
 				}
 
 				if (baseQuantity >= fillOrder.baseQuantity) {
@@ -302,26 +304,27 @@ contract MatchingOrderBook {
 					placeOrderVars.makerOrderPrice = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].price;
 					placeOrderVars.remainingMakerQuoteQuantity = placeOrderVars.remainingMakerBaseQuantity * placeOrderVars.makerOrderPrice / 
 						10**marketDetails.baseTokenDecimals;
+					placeOrderVars.makerPark = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].park;
 					if (placeOrderVars.remainingMakerBaseQuantity < marketDetails.basePostMin || 
 					    placeOrderVars.remainingMakerQuoteQuantity < marketDetails.quotePostMin) {
 						placeOrderVars.maker = orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId].user;
 						
-						// delete the order
+						// delete evicted maker order
 						delete orders[marketId][placeOrderVars.makerSide][placeOrderVars.fillOrderId];
 						orderbooks[marketId][placeOrderVars.makerSide] = fillOrder.nextOrderId;
 						if (fillOrder.nextOrderId != 0) {
 							orders[marketId][placeOrderVars.makerSide][fillOrder.nextOrderId].previousOrderId = 0;
 						}
 
-						// refund the remaining amount
+						// refund the remaining amount for an evicted maker order
 						if (placeOrderVars.makerSide == Side.SELL) {
 							_payOrPark(marketDetails.bankAddress, placeOrderVars.maker, 
-								   marketDetails.baseToken, placeOrderVars.remainingMakerBaseQuantity);
+								   marketDetails.baseToken, placeOrderVars.remainingMakerBaseQuantity, placeOrderVars.makerPark);
 							emit OrderRefunded(placeOrderVars.fillOrderId, marketDetails.baseToken, placeOrderVars.remainingMakerBaseQuantity);
 						}
 						else {
 							_payOrPark(marketDetails.bankAddress, placeOrderVars.maker, 
-								   marketDetails.quoteToken, placeOrderVars.remainingMakerQuoteQuantity);
+								   marketDetails.quoteToken, placeOrderVars.remainingMakerQuoteQuantity, placeOrderVars.makerPark);
 							emit OrderRefunded(placeOrderVars.fillOrderId, marketDetails.quoteToken, placeOrderVars.remainingMakerQuoteQuantity);
 						}
 					}
@@ -338,6 +341,7 @@ contract MatchingOrderBook {
 						placeOrderVars.takerOwed,
 						placeOrderVars.takerFeeOwed,
 						placeOrderVars.protocolFeeOwed,
+						park,
 						referrer
 					);
 					reentrancyGuard = false;
@@ -364,6 +368,7 @@ contract MatchingOrderBook {
 					placeOrderVars.takerOwed,
 					placeOrderVars.takerFeeOwed,
 					placeOrderVars.protocolFeeOwed,
+					park,
 					referrer
 				);
 				reentrancyGuard = false;
@@ -434,7 +439,7 @@ contract MatchingOrderBook {
 					orders[marketId][side][previousOrderId].nextOrderId = orderId;
 				}
 			}
-			orders[marketId][side][orderId] = Order(msg.sender, baseQuantity, price, nextOrderId, previousOrderId);
+			orders[marketId][side][orderId] = Order(msg.sender, park, baseQuantity, price, nextOrderId, previousOrderId);
 
 			// refund leftover funds if necessary
 			uint refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0; 
@@ -447,11 +452,12 @@ contract MatchingOrderBook {
 				placeOrderVars.takerOwed,
 				placeOrderVars.takerFeeOwed,
 				placeOrderVars.protocolFeeOwed,
+				park,
 				referrer
 			);
 		}
 
-		emit OrderPlaced(orderId, msg.sender, marketId, side, baseQuantity, price);
+		emit OrderPlaced(orderId, msg.sender, marketId, side, baseQuantity, price, park);
 		reentrancyGuard = false;
 	}
 
@@ -514,34 +520,40 @@ contract MatchingOrderBook {
 		reentrancyGuard = false;
 	}
 
-	function _payOrPark(address payable bank, address to, address token, uint amount) internal {
+	function _payOrPark(address payable bank, address to, address token, uint amount, bool parkonly) internal {
 		if (amount == 0) return;
-		try Bank(bank).withdrawTo{gas: 200e3}(to, token, amount, false) {}
-		catch {
+		if (parkonly) {
 			failedPayments[to][bank][token] += amount;
 			emit PaymentFailed(to, bank, token, amount);
+		}
+		else {
+			try Bank(bank).withdrawTo{gas: 200e3}(to, token, amount, false) {}
+			catch {
+				failedPayments[to][bank][token] += amount;
+				emit PaymentFailed(to, bank, token, amount);
+			}
 		}
 	}
 
 	// remainingQuantity is in baseToken on sells and quoteToken on buys
-	function _settleTakerPlusFees(Side side, uint remainingQuantity, address payable bank, address baseToken, address quoteToken, uint takerOwed, uint takerFeeOwed, uint protocolFeeOwed, address referrer) internal {
+	function _settleTakerPlusFees(Side side, uint remainingQuantity, address payable bank, address baseToken, address quoteToken, uint takerOwed, uint takerFeeOwed, uint protocolFeeOwed, bool parkTaker, address referrer) internal {
 		// taker, protocol, and referrer split the amount the taker receives
 		address refundToken = (side == Side.SELL) ? baseToken : quoteToken;
 		address feeToken = (side == Side.SELL) ? quoteToken : baseToken;
 
-		_payOrPark(bank, msg.sender, feeToken, takerOwed);
+		_payOrPark(bank, msg.sender, feeToken, takerOwed, parkTaker);
 		if (referrer == address(0)) {
-			_payOrPark(bank, protocolFeeReceiver, feeToken, takerFeeOwed + protocolFeeOwed);
+			_payOrPark(bank, protocolFeeReceiver, feeToken, takerFeeOwed + protocolFeeOwed, false);
 		}
 		else {
-			_payOrPark(bank, referrer, feeToken, takerFeeOwed);
-			_payOrPark(bank, protocolFeeReceiver, feeToken, protocolFeeOwed);
+			_payOrPark(bank, referrer, feeToken, takerFeeOwed, false);
+			_payOrPark(bank, protocolFeeReceiver, feeToken, protocolFeeOwed, false);
 		}
 
 
 		// refund leftover taker funds if necessary
 		if (remainingQuantity > 0) {
-			_payOrPark(bank, msg.sender, refundToken, remainingQuantity);
+			_payOrPark(bank, msg.sender, refundToken, remainingQuantity, parkTaker);
 		}
 	}
 
