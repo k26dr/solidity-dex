@@ -85,6 +85,8 @@ contract MatchingOrderBook {
 		uint takerOwed;
 		uint takerFeeOwed;
 		uint protocolFeeOwed;
+		uint refundQty;
+		bool isSell;
 	}
 	mapping(bytes32 => MarketDetails) public MARKET_DETAILS; // market_id -> MarketDetails
 	mapping(bytes32 => mapping(Side => uint128)) orderbooks; // marketId -> Side -> firstOrderId
@@ -190,7 +192,7 @@ contract MatchingOrderBook {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
-		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), false, 0, 0, 0, 0, 0);
+		PlaceOrderVars memory placeOrderVars = PlaceOrderVars(false, 0, 0, Side.BUY, 0, 0, 0, 0, address(0), false, 0, 0, 0, 0, 0, 0, false);
 		require(marketDetails.bankAddress != address(0), "createMarket before placing an order on it");
 		require(baseQuantity >= marketDetails.baseOrderMin, "base quantity is below minimum");
 		require(price > 0, "zero price orders not permitted");
@@ -331,10 +333,10 @@ contract MatchingOrderBook {
 				}
 
 				if (baseQuantity <= fillOrder.baseQuantity) {
-					uint refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0; 
+					placeOrderVars.refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0; 
 					_settleTakerPlusFees(
 						side, 
-						refundQty,
+						placeOrderVars.refundQty,
 						marketDetails.bankAddress,
 						marketDetails.baseToken,
 						marketDetails.quoteToken,
@@ -358,10 +360,10 @@ contract MatchingOrderBook {
 
 			// refund orders which filled but can't post
 			if (placeOrderVars.fillOccurred && !canPost) {
-				uint refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : baseQuantity;
+				placeOrderVars.refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : baseQuantity;
 				_settleTakerPlusFees(
 					side, 
-					refundQty,
+					placeOrderVars.refundQty,
 					marketDetails.bankAddress,
 					marketDetails.baseToken,
 					marketDetails.quoteToken,
@@ -423,9 +425,9 @@ contract MatchingOrderBook {
 				orderbooks[marketId][side] = orderId;
 			}
 			else {
-				bool isSell = (side == Side.SELL);
-				while ((isSell && nextOrderId != 0 && price >= orders[marketId][side][nextOrderId].price) || 
-				       (!isSell && nextOrderId != 0 && price <= orders[marketId][side][nextOrderId].price)) {
+				placeOrderVars.isSell = (side == Side.SELL);
+				while ((placeOrderVars.isSell && nextOrderId != 0 && price >= orders[marketId][side][nextOrderId].price) || 
+				       (!placeOrderVars.isSell && nextOrderId != 0 && price <= orders[marketId][side][nextOrderId].price)) {
 					previousOrderId = nextOrderId;
 					nextOrderId = orders[marketId][side][nextOrderId].nextOrderId;
 				}
@@ -442,10 +444,10 @@ contract MatchingOrderBook {
 			orders[marketId][side][orderId] = Order(msg.sender, park, baseQuantity, price, nextOrderId, previousOrderId);
 
 			// refund leftover funds if necessary
-			uint refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0; 
+			placeOrderVars.refundQty = (side == Side.BUY) ? placeOrderVars.quoteQuantity - placeOrderVars.usedQuoteQuantity : 0; 
 			_settleTakerPlusFees(
 				side, 
-				refundQty,
+				placeOrderVars.refundQty,
 				marketDetails.bankAddress,
 				marketDetails.baseToken,
 				marketDetails.quoteToken,
