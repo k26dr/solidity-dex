@@ -478,6 +478,7 @@ contract MatchingOrderBook {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		require(sendTo != address(0), "cannot send canceled funds to empty address");
+		require(sendTo != address(this), "cannot send canceled funds to orderbook");
 		MarketDetails memory marketDetails = MARKET_DETAILS[marketId];
 		Order memory order = orders[marketId][side][orderId];
 		require(msg.sender == order.user, "users can only cancel their own order / order may not exist");
@@ -514,6 +515,7 @@ contract MatchingOrderBook {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		require(sendTo != address(0), "cannot withdraw funds to empty address");
+		require(sendTo != address(this), "cannot withdraw funds to orderbook");
 		uint amountToSend = failedPayments[msg.sender][bankAddress][token];
 		require(amountToSend > 0, "no failed payment balance for user+bank+token combo");
 		failedPayments[msg.sender][bankAddress][token] = 0;
