@@ -105,7 +105,7 @@ contract MatchingOrderBook {
 	event OrderFill(uint indexed orderId, address indexed maker, address indexed taker, bytes32 marketId, uint baseQuantity, uint price, address referrer);
 	event OrderRefunded(uint indexed orderId, address token, uint quantity);
 	event MarketCreated(bytes32 indexed marketId, address baseToken, address quoteToken, uint basePostMin, uint quotePostMin, uint baseOrderMin, uint quoteOrderMin, uint feeNumerator, uint feeDenominator, uint baseTokenDecimals, address bankAddress);
-	event PaymentFailed(address indexed user, address indexed bank, address indexed token, uint amount);
+	event PaymentParked(address indexed user, address indexed bank, address indexed token, uint amount);
 	event WithdrawFailedPayment(address indexed user, address indexed bank, address indexed token, uint amount, address sentTo);
 	event ProtocolFeeChanged(uint newPercent);
 
@@ -504,13 +504,13 @@ contract MatchingOrderBook {
 		reentrancyGuard = false;
 	}
 
-	// default withdrawFailedPayment withdraws to user address
-	function withdrawFailedPayment(address payable bankAddress, address token) public {
-		withdrawFailedPayment(bankAddress, token, msg.sender);
+	// default withdrawParkedFunds withdraws to user address
+	function withdrawParkedFunds(address payable bankAddress, address token) public {
+		withdrawParkedFunds(bankAddress, token, msg.sender);
 	}
 
 	// optional sendTo argument allows sending to different addresses in case main address is frozen
-	function withdrawFailedPayment(address payable bankAddress, address token, address sendTo) public {
+	function withdrawParkedFunds(address payable bankAddress, address token, address sendTo) public {
 		require(!reentrancyGuard, "malicious attack");
 		reentrancyGuard = true;
 		require(sendTo != address(0), "cannot withdraw funds to empty address");
@@ -526,13 +526,13 @@ contract MatchingOrderBook {
 		if (amount == 0) return;
 		if (parkonly) {
 			failedPayments[to][bank][token] += amount;
-			emit PaymentFailed(to, bank, token, amount);
+			emit PaymentParked(to, bank, token, amount);
 		}
 		else {
 			try Bank(bank).withdrawTo{gas: 200e3}(to, token, amount, false) {}
 			catch {
 				failedPayments[to][bank][token] += amount;
-				emit PaymentFailed(to, bank, token, amount);
+				emit PaymentParked(to, bank, token, amount);
 			}
 		}
 	}

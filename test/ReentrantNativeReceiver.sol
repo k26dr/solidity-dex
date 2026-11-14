@@ -48,8 +48,8 @@ contract ReentrantNativeReceiver {
 		orderBook.cancelOrder(marketId, side, orderId);
 	}
 
-	function withdrawFailedPayment() external {
-		orderBook.withdrawFailedPayment(bank, address(0));
+	function withdrawParkedFunds() external {
+		orderBook.withdrawParkedFunds(bank, address(0));
 	}
 
 	receive() external payable {
@@ -58,7 +58,7 @@ contract ReentrantNativeReceiver {
 		} else if (attack == Attack.CANCEL_ORDER) {
 			orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, targetOrderId);
 		} else if (attack == Attack.WITHDRAW_FAILED_PAYMENT) {
-			orderBook.withdrawFailedPayment(bank, address(0));
+			orderBook.withdrawParkedFunds(bank, address(0));
 		} else if (attack == Attack.SWALLOWED_PLACE_ORDER) {
 			try orderBook.placeOrder{value: msg.value}(marketId, MatchingOrderBook.Side.SELL, msg.value, 1, address(0)) {}
 			catch Error(string memory reason) {

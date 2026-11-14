@@ -114,8 +114,8 @@ contract ReentrantReceiver is ITransferReceiver {
 		orderBook.cancelOrder(marketId, side, orderId);
 	}
 
-	function withdrawFailedPayment(address token) external {
-		orderBook.withdrawFailedPayment(orderBook.getMarketDetails(marketId).bankAddress, token);
+	function withdrawParkedFunds(address token) external {
+		orderBook.withdrawParkedFunds(orderBook.getMarketDetails(marketId).bankAddress, token);
 	}
 
 	function onTransferReceived(address, address, uint256, bytes calldata) external returns (bytes4) {
@@ -124,7 +124,7 @@ contract ReentrantReceiver is ITransferReceiver {
 		} else if (attack == Attack.CANCEL_ORDER) {
 			orderBook.cancelOrder(marketId, MatchingOrderBook.Side.SELL, 1);
 		} else if (attack == Attack.WITHDRAW_FAILED_PAYMENT) {
-			orderBook.withdrawFailedPayment(orderBook.getMarketDetails(marketId).bankAddress, msg.sender);
+			orderBook.withdrawParkedFunds(orderBook.getMarketDetails(marketId).bankAddress, msg.sender);
 		} else if (attack == Attack.CREATE_MARKET) {
 			orderBook.createMarket(address(1), address(2), 1, 1, 1, 1, 0, 1);
 		} else if (attack == Attack.BURN_GAS) {

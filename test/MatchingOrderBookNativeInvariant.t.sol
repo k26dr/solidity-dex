@@ -182,13 +182,13 @@ contract NativeMatchingOrderBookHandler is Test {
 	}
 
 	// Withdraws an actor's parked native payment from one market's bank, if it has one
-	function withdrawFailedPayment(uint actorSeed, bool nativeBase, bool withMinimums) external {
+	function withdrawParkedFunds(uint actorSeed, bool nativeBase, bool withMinimums) external {
 		address actor = actors[actorSeed % actors.length];
 		bytes32 marketId = _market(nativeBase, withMinimums);
 		address payable bank = orderBook.getMarketDetails(marketId).bankAddress;
 		if (orderBook.failedPaymentBalance(actor, bank, address(0)) == 0) return;
 		vm.prank(actor);
-		orderBook.withdrawFailedPayment(bank, address(0));
+		orderBook.withdrawParkedFunds(bank, address(0));
 		withdrawCalls++;
 	}
 }
@@ -220,7 +220,7 @@ contract NativeMatchingOrderBookInvariantTest is Test {
 		bytes4[] memory selectors = new bytes4[](3);
 		selectors[0] = NativeMatchingOrderBookHandler.placeOrder.selector;
 		selectors[1] = NativeMatchingOrderBookHandler.cancelOrder.selector;
-		selectors[2] = NativeMatchingOrderBookHandler.withdrawFailedPayment.selector;
+		selectors[2] = NativeMatchingOrderBookHandler.withdrawParkedFunds.selector;
 		targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
 	}
 
